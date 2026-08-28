@@ -6,6 +6,7 @@ mockup*.html
 
 # 构建 / 分发产物（可由源码重新生成）
 homepage-extension.zip
+dist/
 
 # 依赖与缓存
 node_modules/
