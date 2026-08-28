@@ -42,7 +42,8 @@ function defaults() {
         { name: '设置',   url: 'https://www.bing.com' },
       ],
     },
-    cardOrder: ['work', 'fun', 'study'],           // 分组卡片顺序
+    cardOrder: ['work', 'fun', 'study'],           // #cards 区域内分组卡片的顺序
+    extrasOrder: ['todo', 'notes', 'ambient'],    // .extras 区域内卡片的顺序（待办/便签/环境音）
     todos: [
       { text: '回复客户邮件', done: true },
       { text: '完成主页原型', done: false },
@@ -328,6 +329,7 @@ function renderGroups() {
       if (after == null) box.appendChild(dragging); else box.insertBefore(dragging, after);
     });
   });
+  refreshDraggables();   // 新生成的分组卡片也要具备拖拽能力
   applyCardOrder();
 }
 // 拖拽后按 DOM 顺序回写该分组的书签
@@ -445,37 +447,67 @@ function bindTheme() {
   });
 }
 
-/* ---------- 11. 卡片拖拽排序（分组间） ---------- */
+/* ---------- 11. 卡片自由拖拽（可跨区域：分组卡片 ↔ 待办/便签/环境音） ---------- */
+const CARD_ZONES = ['#cards', '.extras'];   // 两个可放置区域
+
+// 让元素可拖拽。用 data-dragbound 打标记，避免重复绑定监听（分组重绘会反复调用）
+function makeDraggable(el) {
+  if (el.dataset.dragBound) return;
+  el.dataset.dragBound = '1';
+  el.setAttribute('draggable', 'true');
+  el.addEventListener('dragstart', () => el.classList.add('dragging'));
+  el.addEventListener('dragend', () => { el.classList.remove('dragging'); saveCardOrder(); });
+}
+// 每次重绘分组后都要跑一遍，否则新增的分组卡片不具拖拽能力
+function refreshDraggables() { document.querySelectorAll('.draggable').forEach(makeDraggable); }
+
+// 按记录的顺序重排容器内的卡片。
+// 用 JS 比对 dataset.id 而不是属性选择器，分组名里带引号也不会出错。
+function reorderZone(container, order) {
+  if (!container || !order) return;
+  order.forEach(id => {
+    const el = Array.prototype.find.call(container.children, c => c.dataset.id === id);
+    if (el) container.appendChild(el);
+  });
+}
 function applyCardOrder() {
-  const cards = document.getElementById('cards');
-  state.cardOrder.forEach(id => { const el = document.getElementById('card-' + id) || cards.querySelector('[data-id="' + id + '"]'); if (el) cards.appendChild(el); });
+  reorderZone(document.getElementById('cards'), state.cardOrder);
+  reorderZone(document.querySelector('.extras'), state.extrasOrder);
 }
 function saveCardOrder() {
-  state.cardOrder = [...document.querySelectorAll('#cards .draggable')].map(el => el.dataset.id);
+  const ids = sel => Array.prototype.map.call(document.querySelectorAll(sel + ' .draggable'), el => el.dataset.id);
+  state.cardOrder = ids('#cards');
+  state.extrasOrder = ids('.extras');
   save();
 }
-function bindDrag() {
-  const container = document.getElementById('cards');
-  container.addEventListener('dragover', e => {
-    e.preventDefault();
-    const dragging = document.querySelector('#cards .draggable.dragging'); if (!dragging) return;
-    const after = getDragAfter(container, e.clientY);
-    if (after == null) container.appendChild(dragging); else container.insertBefore(dragging, after);
-  });
-  container.querySelectorAll('.draggable').forEach(el => {
-    el.setAttribute('draggable', 'true');
-    el.addEventListener('dragstart', () => el.classList.add('dragging'));
-    el.addEventListener('dragend', () => { el.classList.remove('dragging'); saveCardOrder(); });
-  });
-}
-function getDragAfter(container, y) {
-  const els = [...container.querySelectorAll('.draggable:not(.dragging)')];
-  return els.reduce((closest, child) => {
+// 网格是二维的，必须 X、Y 一起判断插入位置（原来只比 Y，多列布局时会插错位置）
+function getDragAfter(container, x, y) {
+  let closest = null, closestOffset = Infinity;
+  container.querySelectorAll('.draggable:not(.dragging)').forEach(child => {
     const b = child.getBoundingClientRect();
-    const o = y - b.top - b.height / 2;
-    if (o < 0 && o > closest.offset) return { offset: o, element: child };
-    return closest;
-  }, { offset: -Infinity, element: null }).element;
+    const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    if (x < cx && y < cy) {                        // 指针在元素中心的左上方 → 插到它前面
+      const offset = (cx - x) + (cy - y);
+      if (offset < closestOffset) { closestOffset = offset; closest = child; }
+    }
+  });
+  return closest;
+}
+function bindDrag() {
+  CARD_ZONES.forEach(sel => {
+    const container = document.querySelector(sel);
+    if (!container) return;
+    container.addEventListener('dragover', e => {
+      // 只处理"卡片"拖拽；书签是 .chip.dragging，交给书签自己的逻辑，这里不拦截
+      const dragging = document.querySelector('.draggable.dragging');
+      if (!dragging) return;
+      e.preventDefault();
+      const after = getDragAfter(container, e.clientX, e.clientY);
+      if (after == null) container.appendChild(dragging); else container.insertBefore(dragging, after);
+    });
+  });
+  refreshDraggables();
+  applyCardOrder();
 }
 
 /* ---------- 12. 设置中心 ---------- */
