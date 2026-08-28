@@ -102,6 +102,39 @@
       <input type="range" id="amb-vol" min="0" max="1" step="0.05" value="0.5" />
     </div>
 
+    <!-- D1：番茄钟 / 专注计时 -->
+    <div class="glass pomodoro draggable" id="comp-pomodoro" data-id="pomodoro">
+      <h3>番茄钟</h3>
+      <div class="pomo-ring"><svg viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="52"/><circle class="ring-fg" id="pomo-ring" cx="60" cy="60" r="52"/></svg><span class="pomo-time" id="pomo-time">25:00</span></div>
+      <div class="pomo-mode" id="pomo-mode">专注</div>
+      <div class="pomo-btns">
+        <button id="pomo-start">开始</button>
+        <button id="pomo-reset">重置</button>
+      </div>
+      <div class="pomo-set">
+        <label>专注 <input type="number" id="pomo-work" min="1" max="120" value="25" /> 分</label>
+        <label>休息 <input type="number" id="pomo-break" min="1" max="60" value="5" /> 分</label>
+      </div>
+    </div>
+
+    <!-- D2：日历 -->
+    <div class="glass calendar draggable" id="comp-calendar" data-id="calendar">
+      <h3>日历 <span class="cal-nav"><button id="cal-prev" title="上个月">‹</button><button id="cal-next" title="下个月">›</button></span></h3>
+      <div class="cal-head" id="cal-head"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+
+    <!-- D3：倒计时 / 纪念日 -->
+    <div class="glass countdown draggable" id="comp-countdown" data-id="countdown">
+      <h3>倒计时 <span class="add-todo" id="cd-add" title="添加目标">＋</span></h3>
+      <div class="cd-add-row" id="cd-add-row" hidden>
+        <input id="cd-name" placeholder="名称，如 生日" autocomplete="off" />
+        <input id="cd-date" type="date" />
+        <button id="cd-save">保存</button>
+      </div>
+      <div id="cd-list"></div>
+    </div>
+
     </div><!-- /.extras -->
 
     <div class="hint">⠿ 拖动卡片排序　·　🎲 换壁纸　·　🌗 明暗　·　⚙ 设置　·　＋图 用自己的图　·　/ 搜索　·　? 快捷键</div>
@@ -117,6 +150,15 @@
       <div class="modal-body">
         <label class="row"><span>默认搜索引擎</span>
           <select id="set-engine"></select></label>
+        <div class="row col"><span>自定义搜索引擎</span>
+          <div id="engine-list" class="engine-list"></div>
+          <div class="engine-add">
+            <input id="eng-name" placeholder="名称，如 豆瓣" autocomplete="off" />
+            <input id="eng-url" placeholder="搜索地址（含 {q}），如 https://search.douban.com/?q={q}" autocomplete="off" />
+            <button id="eng-add" title="添加自定义引擎">添加</button>
+          </div>
+          <p class="tip">提示：地址里用 <code>{q}</code> 占位查询词；内置引擎不可删除。</p>
+        </div>
         <label class="row"><span>壁纸分类</span>
           <select id="set-wall">
             <option value="nature">自然</option>
@@ -141,6 +183,9 @@
           <label class="chk"><input type="checkbox" data-comp="todo" /> 待办</label>
           <label class="chk"><input type="checkbox" data-comp="notes" /> 便签</label>
           <label class="chk"><input type="checkbox" data-comp="ambient" /> 环境音</label>
+          <label class="chk"><input type="checkbox" data-comp="pomodoro" /> 番茄钟</label>
+          <label class="chk"><input type="checkbox" data-comp="calendar" /> 日历</label>
+          <label class="chk"><input type="checkbox" data-comp="countdown" /> 倒计时</label>
         </div>
         <div class="row col"><span>数据</span>
           <div class="data-btns">
@@ -161,6 +206,7 @@
       <div class="modal-body">
         <div class="kbd-row"><span class="key">/</span><span>聚焦搜索框</span></div>
         <div class="kbd-row"><span class="key">↑ ↓</span><span>切换搜索引擎（搜索框聚焦时）</span></div>
+        <div class="kbd-row"><span class="key">1–9</span><span>打开对应书签（书签左上角数字）</span></div>
         <div class="kbd-row"><span class="key">W</span><span>随机换一张壁纸</span></div>
         <div class="kbd-row"><span class="key">T</span><span>切换深色 / 浅色主题</span></div>
         <div class="kbd-row"><span class="key">?</span><span>打开 / 关闭本帮助</span></div>

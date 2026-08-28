@@ -19,11 +19,15 @@ function defaults() {
     // idx 记住每个分类「当前第几张」，保证点同一个分类永远是同一张，不再随机跳变
     wallpaper: { style: 'nature', custom: null, idx: { nature: 0, city: 0, minimal: 0, abstract: 0 } },
     engine: 'bing',                               // 默认搜索引擎（必应）
+    engines: {},                                 // 用户自定义引擎：{ key: { name, url(模板字符串，含 {q}) } }
     components: {                                  // 各组件是否显示
       clock: true, weather: true, search: true,
       quote: true, styles: true, todo: true,
       notes: true, ambient: true,                // 四期新增：便签 / 环境音
+      pomodoro: true, calendar: true, countdown: true,  // D 系列新组件
     },
+    pomodoro: { work: 25, break: 5 },             // 番茄钟时长（分钟），仅记设置不记运行态
+    events: [],                                    // D3 倒计时/纪念日：[{ name, date:'YYYY-MM-DD' }]
     weather: { name: '北京', lat: 39.9042, lon: 116.4074 }, // 四期：记住城市
     bookmarks: {                                   // 网站导航（动态分组）
       work:  [
@@ -46,7 +50,7 @@ function defaults() {
       ],
     },
     cardOrder: ['work', 'fun', 'study'],           // #cards 区域内分组卡片的顺序
-    extrasOrder: ['todo', 'notes', 'ambient'],    // .extras 区域内卡片的顺序（待办/便签/环境音）
+    extrasOrder: ['todo', 'notes', 'ambient', 'pomodoro', 'calendar', 'countdown'], // .extras 卡片顺序（含 D 系列新组件）
     todos: [
       { text: '回复客户邮件', done: true },
       { text: '完成主页原型', done: false },
@@ -325,7 +329,8 @@ function renderWeatherPop(name, daily) {
 function initWeatherPop() { renderWeatherPop((state.weather && state.weather.name) || '天气', null); }
 
 /* ---------- 5. 搜索框：切换引擎 + 算式计算 + 快捷键切引擎 ---------- */
-const ENGINES = {
+// 内置引擎（只读，不可删）。注意：自定义引擎存到 state.engines，二者合并后才是完整列表。
+const DEFAULT_ENGINES = {
   baidu:    { name: '百度',     url: q => 'https://www.baidu.com/s?wd=' + encodeURIComponent(q) },
   bing:     { name: '必应',     url: q => 'https://www.bing.com/search?q=' + encodeURIComponent(q) },
   google:   { name: 'Google',   url: q => 'https://www.google.com/search?q=' + encodeURIComponent(q) },
@@ -339,23 +344,33 @@ const ENGINES = {
   taobao:   { name: '淘宝',     url: q => 'https://s.taobao.com/search?q=' + encodeURIComponent(q) },
   youtube:  { name: 'YouTube',  url: q => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) },
 };
-function updateEngineLabel() { document.getElementById('engine-label').textContent = ENGINES[state.engine].name + ' ▾'; }
+// 合并「内置 + 用户自定义」，返回 { key: { name, url } }；自定义引擎的 url 是带 {q} 的模板字符串
+function allEngines() { return Object.assign({}, DEFAULT_ENGINES, state.engines || {}); }
+// 统一取搜索链接：内置是函数，自定义是字符串模板（把 {q} 替换为编码后的查询词）
+function engineUrl(key, q) {
+  const e = allEngines()[key]; if (!e) return null;
+  if (typeof e.url === 'function') return e.url(q);
+  return e.url.replace(/\{q\}/g, encodeURIComponent(q));
+}
+function updateEngineLabel() { document.getElementById('engine-label').textContent = allEngines()[state.engine].name + ' ▾'; }
 function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
   if (/^[0-9+\-*/().\s]+$/.test(q) && /[+\-*/]/.test(q)) {       // 纯算式 → 直接算
     try { const r = Function('return (' + q + ')')(); toast('= ' + r); return; } catch (e) {}
   }
-  window.open(ENGINES[state.engine].url(q), '_blank');
+  const url = engineUrl(state.engine, q);
+  if (url) window.open(url, '_blank');
 }
 // 四期③：在搜索框聚焦时按 ↑/↓ 循环切换引擎
 function cycleEngine(dir) {
-  const keys = Object.keys(ENGINES);
+  const keys = Object.keys(allEngines());
   let i = keys.indexOf(state.engine);
+  if (i < 0) i = 0;
   i = (i + dir + keys.length) % keys.length;
   state.engine = keys[i]; save(); updateEngineLabel();
   document.getElementById('engine-menu').querySelectorAll('div').forEach(x => x.classList.toggle('on', x.dataset.key === keys[i]));
-  toast('引擎：' + ENGINES[keys[i]].name);
+  toast('引擎：' + allEngines()[keys[i]].name);
 }
 function toast(msg) {
   const t = document.createElement('div');
@@ -418,13 +433,31 @@ function renderGroups() {
   });
   refreshDraggables();   // 新生成的分组卡片也要具备拖拽能力
   applyCardOrder();
+  assignHotkeys();       // 给前 9 个书签分配数字快捷跳转键
+}
+// C2：给书签分配 1-9 快捷数字（按 DOM 顺序），并在角标显示；超过 9 个不再分配
+function assignHotkeys() {
+  const chips = [...document.querySelectorAll('.chip')];
+  chips.forEach((chip, i) => {
+    const old = chip.querySelector(':scope > .hot'); if (old) old.remove();
+    if (i < 9) {
+      chip.dataset.hot = String(i + 1);
+      const b = document.createElement('span'); b.className = 'hot'; b.textContent = i + 1;
+      chip.insertBefore(b, chip.firstChild);
+    } else { delete chip.dataset.hot; }
+  });
+}
+// 按下数字键时，直接打开对应书签
+function jumpToBookmark(n) {
+  const chip = document.querySelector('.chip[data-hot="' + n + '"]');
+  if (chip && chip.dataset.url) window.open(chip.dataset.url, '_blank');
 }
 // 拖拽后按 DOM 顺序回写该分组的书签
 function saveBookmarkOrder(g) {
   const box = document.querySelector('.chips[data-group="' + g + '"]');
   const arr = [];
   box.querySelectorAll('.chip').forEach(ch => arr.push({ name: ch.dataset.name, url: ch.dataset.url }));
-  state.bookmarks[g] = arr; save();
+  state.bookmarks[g] = arr; save(); assignHotkeys();
 }
 function getDragAfterChip(container, y) {
   const els = [...container.querySelectorAll('.chip:not(.dragging)')];
@@ -605,9 +638,64 @@ function bindDrag() {
 /* ---------- 12. 设置中心 ---------- */
 function populateEngineSelect() {
   const sel = document.getElementById('set-engine');
-  Object.entries(ENGINES).forEach(([k, v]) => {
+  sel.innerHTML = '';
+  Object.entries(allEngines()).forEach(([k, v]) => {
     const o = document.createElement('option'); o.value = k; o.textContent = v.name; sel.appendChild(o);
   });
+}
+// 自定义引擎管理：渲染列表 + 绑定增删。改动后刷新下拉/菜单/标签。
+function renderEngineManager() {
+  const box = document.getElementById('engine-list');
+  if (!box) return;
+  box.innerHTML = '';
+  const custom = state.engines || {};
+  const keys = Object.keys(custom);
+  if (!keys.length) { box.innerHTML = '<p class="tip">暂无自定义引擎</p>'; return; }
+  keys.forEach(k => {
+    const e = custom[k];
+    const row = document.createElement('div'); row.className = 'eng-item';
+    row.innerHTML = '<span class="eng-name"></span><button class="eng-del" title="删除">✕</button>';
+    row.querySelector('.eng-name').textContent = e.name + '（' + k + '）';
+    row.querySelector('.eng-del').addEventListener('click', () => {
+      delete state.engines[k];
+      if (state.engine === k) state.engine = 'bing';   // 删掉正在用的，回退到必应
+      save(); renderEngineManager(); refreshEngines();
+    });
+    box.appendChild(row);
+  });
+}
+// 改完引擎相关设置后，统一重建：下拉、搜索框菜单、当前标签
+function refreshEngines() {
+  populateEngineSelect();
+  const sel = document.getElementById('set-engine'); if (sel) sel.value = state.engine;
+  // 重建搜索框菜单
+  const menu = document.getElementById('engine-menu'); menu.innerHTML = '';
+  Object.entries(allEngines()).forEach(([k, v]) => {
+    const d = document.createElement('div'); d.textContent = v.name; d.dataset.key = k;
+    if (k === state.engine) d.classList.add('on');
+    d.addEventListener('click', () => {
+      state.engine = k; save(); updateEngineLabel(); menu.classList.remove('open');
+      menu.querySelectorAll('div').forEach(x => x.classList.remove('on')); d.classList.add('on');
+    });
+    menu.appendChild(d);
+  });
+  updateEngineLabel();
+}
+function addCustomEngine() {
+  const name = document.getElementById('eng-name').value.trim();
+  const url = document.getElementById('eng-url').value.trim();
+  if (!name || !url) { toast('请填写名称和地址'); return; }
+  if (url.indexOf('{q}') < 0) { toast('地址必须包含 {q} 占位符'); return; }
+  // 生成 key：拼音/英文小写，冲突则加数字；避免与内置 key 撞
+  let key = name.toLowerCase().replace(/[^a-z0-9]+/g, '') || ('e' + Date.now());
+  while (DEFAULT_ENGINES[key] || (state.engines && state.engines[key])) key += '1';
+  state.engines = state.engines || {};
+  state.engines[key] = { name, url };
+  save();
+  document.getElementById('eng-name').value = '';
+  document.getElementById('eng-url').value = '';
+  renderEngineManager(); refreshEngines();
+  toast('已添加引擎：' + name);
 }
 function applyComponents() {
   Object.keys(state.components).forEach(c => {
@@ -625,6 +713,7 @@ function bindSettings() {
     document.getElementById('set-veil').value = state.veil;
     document.getElementById('set-theme').value = state.theme === 'light' ? 'light' : 'dark';
     document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => { cb.checked = state.components[cb.dataset.comp]; });
+    renderEngineManager();            // 打开时刷新自定义引擎列表
     modal.classList.add('open');
   };
   document.getElementById('btn-settings').addEventListener('click', open);
@@ -642,6 +731,10 @@ function bindSettings() {
   document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => {
     cb.addEventListener('change', () => { state.components[cb.dataset.comp] = cb.checked; save(); applyComponents(); });
   });
+  // 自定义搜索引擎：添加（按钮 + 回车）
+  document.getElementById('eng-add').addEventListener('click', addCustomEngine);
+  document.getElementById('eng-name').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomEngine(); });
+  document.getElementById('eng-url').addEventListener('keydown', e => { if (e.key === 'Enter') addCustomEngine(); });
   // 导出
   document.getElementById('set-export').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -800,14 +893,118 @@ function bindKeys() {
     else if (e.key === 'w' || e.key === 'W') { nextWallpaper(); }
     else if (e.key === 't' || e.key === 'T') { toggleTheme(); }
     else if (e.key === '?') { toggleKbd(); }
+    else if (/^[1-9]$/.test(e.key)) {                 // 数字键直达书签（弹窗开着时不响应）
+      if (document.querySelector('.modal-mask.open')) return;
+      jumpToBookmark(e.key);
+    }
   });
+}
+
+/* ---------- 13b. D 系列组件：番茄钟 / 日历 / 倒计时 ---------- */
+
+/* D1：番茄钟 / 专注计时（只记设置，运行态不持久化，刷新即重置） */
+let pomoTimer = null, pomoLeft = 0, pomoIsBreak = false;
+function pomoTotalSec() { return (pomoIsBreak ? state.pomodoro.break : state.pomodoro.work) * 60; }
+function fmtMMSS(s) { const m = Math.floor(s / 60), x = s % 60; return String(m).padStart(2, '0') + ':' + String(x).padStart(2, '0'); }
+function renderPomodoro() {
+  const total = pomoTotalSec();
+  if (!pomoTimer) pomoLeft = total;                 // 未开始时，显示设定时长
+  document.getElementById('pomo-time').textContent = fmtMMSS(pomoLeft);
+  document.getElementById('pomo-mode').textContent = pomoIsBreak ? '休息' : '专注';
+  const ring = document.getElementById('pomo-ring');
+  const C = 2 * Math.PI * 52;
+  ring.style.strokeDasharray = C;
+  ring.style.strokeDashoffset = C * (1 - pomoLeft / total);
+}
+function pomoStart() {
+  if (pomoTimer) { clearInterval(pomoTimer); pomoTimer = null; document.getElementById('pomo-start').textContent = '继续'; return; }
+  if (!pomoLeft) pomoLeft = pomoTotalSec();
+  document.getElementById('pomo-start').textContent = '暂停';
+  pomoTimer = setInterval(() => {
+    pomoLeft--;
+    if (pomoLeft <= 0) {                            // 一段结束 → 切换专注/休息
+      clearInterval(pomoTimer); pomoTimer = null;
+      pomoIsBreak = !pomoIsBreak; pomoLeft = pomoTotalSec();
+      toast(pomoIsBreak ? '休息一下 ☕' : '开始专注 💪');
+    }
+    renderPomodoro();
+  }, 1000);
+}
+function pomoReset() {
+  if (pomoTimer) { clearInterval(pomoTimer); pomoTimer = null; }
+  pomoIsBreak = false; pomoLeft = pomoTotalSec();
+  document.getElementById('pomo-start').textContent = '开始';
+  renderPomodoro();
+}
+function bindPomodoro() {
+  document.getElementById('pomo-start').addEventListener('click', pomoStart);
+  document.getElementById('pomo-reset').addEventListener('click', pomoReset);
+  document.getElementById('pomo-work').addEventListener('change', e => { state.pomodoro.work = Math.max(1, +e.target.value || 25); save(); if (!pomoTimer) pomoReset(); });
+  document.getElementById('pomo-break').addEventListener('change', e => { state.pomodoro.break = Math.max(1, +e.target.value || 5); save(); if (!pomoTimer) pomoReset(); });
+  renderPomodoro();
+}
+
+/* D2：日历（月视图，高亮今天） */
+let calView = new Date();
+const WK = ['日', '一', '二', '三', '四', '五', '六'];
+function renderCalendar() {
+  const y = calView.getFullYear(), m = calView.getMonth();
+  document.getElementById('cal-head').textContent = y + ' 年 ' + (m + 1) + ' 月';
+  const grid = document.getElementById('cal-grid'); grid.innerHTML = '';
+  WK.forEach(w => { const h = document.createElement('div'); h.className = 'cal-w'; h.textContent = w; grid.appendChild(h); });
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const today = new Date();
+  for (let i = 0; i < first; i++) { const e = document.createElement('div'); e.className = 'cal-cell empty'; grid.appendChild(e); }
+  for (let d = 1; d <= days; d++) {
+    const e = document.createElement('div'); e.className = 'cal-cell'; e.textContent = d;
+    if (d === today.getDate() && m === today.getMonth() && y === today.getFullYear()) e.classList.add('today');
+    grid.appendChild(e);
+  }
+}
+function bindCalendar() {
+  document.getElementById('cal-prev').addEventListener('click', () => { calView.setMonth(calView.getMonth() - 1); renderCalendar(); });
+  document.getElementById('cal-next').addEventListener('click', () => { calView.setMonth(calView.getMonth() + 1); renderCalendar(); });
+  renderCalendar();
+}
+
+/* D3：倒计时 / 纪念日 */
+function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
+function renderCountdown() {
+  const list = document.getElementById('cd-list'); list.innerHTML = '';
+  const evs = state.events || [];
+  if (!evs.length) { list.innerHTML = '<p class="tip">还没有目标，点 ＋ 添加</p>'; return; }
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  evs.forEach((ev, i) => {
+    const target = new Date(ev.date + 'T00:00:00');
+    const diff = daysBetween(now, target);
+    const row = document.createElement('div'); row.className = 'cd-item';
+    const txt = diff === 0 ? '就是今天 🎉' : (diff > 0 ? '还有 ' + diff + ' 天' : '已过 ' + (-diff) + ' 天');
+    row.innerHTML = '<span class="cd-name"></span><span class="cd-days">' + txt + '</span><span class="cd-del" title="删除">✕</span>';
+    row.querySelector('.cd-name').textContent = ev.name + '（' + ev.date + '）';
+    row.querySelector('.cd-del').addEventListener('click', () => { state.events.splice(i, 1); save(); renderCountdown(); });
+    list.appendChild(row);
+  });
+}
+function bindCountdown() {
+  const row = document.getElementById('cd-add-row');
+  document.getElementById('cd-add').addEventListener('click', () => { row.hidden = !row.hidden; });
+  document.getElementById('cd-save').addEventListener('click', () => {
+    const name = document.getElementById('cd-name').value.trim();
+    const date = document.getElementById('cd-date').value;
+    if (!name || !date) { toast('请填写名称和日期'); return; }
+    state.events = state.events || []; state.events.push({ name, date }); save();
+    document.getElementById('cd-name').value = ''; document.getElementById('cd-date').value = '';
+    row.hidden = true; renderCountdown();
+  });
+  renderCountdown();
 }
 
 /* ---------- 15. 绑定所有交互 ---------- */
 function bindEvents() {
   // 搜索引擎菜单
   const menu = document.getElementById('engine-menu');
-  Object.entries(ENGINES).forEach(([k, v]) => {
+  Object.entries(allEngines()).forEach(([k, v]) => {
     const d = document.createElement('div');
     d.textContent = v.name; d.dataset.key = k;
     if (k === state.engine) d.classList.add('on');
@@ -840,6 +1037,9 @@ function bindEvents() {
   bindSettings();
   bindNotes();
   bindAmbient();
+  bindPomodoro();
+  bindCalendar();
+  bindCountdown();
   bindKeys();
 
   // 四期④：天气弹窗开关 + 点击外部关闭
