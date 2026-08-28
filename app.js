@@ -584,36 +584,88 @@ function bindNotes() {
   if (clear) clear.addEventListener('click', () => { if (confirm('清空便签？')) { ta.value = ''; state.notes = ''; save(); } });
 }
 // 环境音：用 Web Audio 实时生成噪音（无需任何外部文件）
-let audioCtx = null, noiseNode = null, noiseGain = null;
+let audioCtx = null, noiseNode = null, noiseGain = null, noiseLfo = null, noiseLfoGain = null;
 function ensureAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-function startNoise(type) {
-  ensureAudio();
-  stopNoise();
-  const ctx = audioCtx;
-  const size = ctx.sampleRate * 2;                       // 2 秒缓冲，循环播放
-  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
+
+// 每种声音的「音色配方」：
+//   filter / freq / q —— 决定音色骨架；
+//   lfo               —— 用低频振荡器做缓慢起伏，让声音有呼吸感，而不是一条死的直线。
+const AMB_CFG = {
+  white: { filter: 'lowpass',  freq: 18000 },
+  pink:  { filter: 'lowpass',  freq: 18000 },
+  brown: { filter: 'lowpass',  freq: 800 },
+  rain:  { filter: 'lowpass',  freq: 1200 },
+  // 咖啡馆：人声嘈杂集中在中频 → 带通取中频，再配缓慢的音量起伏模拟人语声浪
+  cafe:  { filter: 'bandpass', freq: 900, q: 0.7, lfo: { rate: 0.12, depth: 0.22, target: 'gain' } },
+  // 海浪：让低通截止频率缓慢上下摆动，形成「哗——哗——」的涌动感
+  waves: { filter: 'lowpass',  freq: 700,         lfo: { rate: 0.09, depth: 420,  target: 'freq' } },
+  // 篝火：底噪 + 随机爆裂（爆裂在波形里加），音量轻微抖动
+  fire:  { filter: 'lowpass',  freq: 1100,        lfo: { rate: 0.30, depth: 0.16, target: 'gain' } },
+};
+
+// 往缓冲区里填波形
+function fillNoise(data, type) {
+  const size = data.length;
   if (type === 'white') {
     for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
-  } else if (type === 'pink') {                          // 粉噪音：更柔和
+    return;
+  }
+  if (type === 'pink') {                                // 粉噪音：比白噪音柔和
     let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
     for (let i = 0; i < size; i++) { const w = Math.random()*2-1;
       b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759; b2=0.96900*b2+w*0.1538520;
       b3=0.86650*b3+w*0.3104856; b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
       data[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926; }
-  } else if (type === 'brown') {                         // 棕噪音：更低沉
-    let last = 0; for (let i = 0; i < size; i++) { const w = Math.random()*2-1; data[i] = (last + 0.02*w)/1.02; last = data[i]; data[i] *= 3.5; }
-  } else if (type === 'rain') {                          // 雨声：白噪音过低通
-    for (let i = 0; i < size; i++) data[i] = (Math.random()*2-1) * 0.5;
+    return;
   }
+  if (type === 'rain') {                                // 雨声：白噪音压低幅度再过低通
+    for (let i = 0; i < size; i++) data[i] = (Math.random()*2-1) * 0.5;
+    return;
+  }
+  // 棕噪音：低沉，作为 咖啡馆 / 海浪 / 篝火 三种声音的共同底噪
+  let last = 0;
+  for (let i = 0; i < size; i++) { const w = Math.random()*2-1; data[i] = (last + 0.02*w)/1.02; last = data[i]; data[i] *= 3.5; }
+  if (type === 'fire') {                                // 篝火：叠上稀疏的「噼啪」爆裂
+    for (let i = 0; i < size; i++) {
+      if (Math.random() < 0.0009) {                     // 每隔一小段随机来一声
+        const amp = Math.random() * 0.9 + 0.3;
+        for (let j = 0; j < 60 && i + j < size; j++) data[i + j] += amp * (Math.random()*2-1) * Math.exp(-j/12);
+      }
+    }
+  }
+}
+
+function startNoise(type) {
+  ensureAudio();
+  stopNoise();
+  const ctx = audioCtx;
+  const cfg = AMB_CFG[type] || AMB_CFG.white;
+  const size = ctx.sampleRate * 2;                      // 2 秒缓冲，循环播放
+  const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+  fillNoise(buffer.getChannelData(0), type);
+
   noiseNode = ctx.createBufferSource(); noiseNode.buffer = buffer; noiseNode.loop = true;
-  const filter = ctx.createBiquadFilter(); filter.type = 'lowpass';
-  filter.frequency.value = type === 'rain' ? 1200 : (type === 'brown' ? 800 : 18000);
+  const filter = ctx.createBiquadFilter();
+  filter.type = cfg.filter; filter.frequency.value = cfg.freq;
+  if (cfg.q) filter.Q.value = cfg.q;
   noiseGain = ctx.createGain(); noiseGain.gain.value = parseFloat(document.getElementById('amb-vol').value);
   noiseNode.connect(filter); filter.connect(noiseGain); noiseGain.connect(ctx.destination);
+
+  // 起伏：把低频振荡器接到「音量」或「滤波频率」上
+  if (cfg.lfo) {
+    noiseLfo = ctx.createOscillator(); noiseLfo.frequency.value = cfg.lfo.rate;
+    noiseLfoGain = ctx.createGain(); noiseLfoGain.gain.value = cfg.lfo.depth;
+    noiseLfo.connect(noiseLfoGain);
+    noiseLfoGain.connect(cfg.lfo.target === 'gain' ? noiseGain.gain : filter.frequency);
+    noiseLfo.start();
+  }
   noiseNode.start(0);
 }
-function stopNoise() { if (noiseNode) { try { noiseNode.stop(); } catch (e) {} noiseNode.disconnect(); noiseNode = null; } }
+function stopNoise() {
+  if (noiseLfo) { try { noiseLfo.stop(); } catch (e) {} try { noiseLfo.disconnect(); } catch (e) {} noiseLfo = null; }
+  if (noiseLfoGain) { try { noiseLfoGain.disconnect(); } catch (e) {} noiseLfoGain = null; }
+  if (noiseNode) { try { noiseNode.stop(); } catch (e) {} noiseNode.disconnect(); noiseNode = null; }
+}
 function bindAmbient() {
   const playBtn = document.getElementById('amb-play');
   const sel = document.getElementById('amb-type');
