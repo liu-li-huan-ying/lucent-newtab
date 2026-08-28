@@ -28,6 +28,29 @@
 
 > 也可本地预览：在本目录运行 `python -m http.server 8123`，浏览器访问 `http://localhost:8123/`。
 
+## 📦 自动构建与发版
+
+仓库已配置 GitHub Actions（`.github/workflows/release.yml`），无需手动打包：
+
+- **每次推送 `main`**：自动构建扩展压缩包并作为 Artifact 上传，仓库 Actions 页可随时下载最新构件。
+- **打版本标签（如 `v1.2.0`）**：自动创建 GitHub Release，附带 `lucent-newtab-vX.Y.Z.zip` 与自动更新日志。
+
+本地发版步骤：
+
+```bash
+# 1. 改完代码后，修改 manifest.json 里的 version
+# 2. 提交
+git add -A && git commit -m "feat: ..."
+# 3. 打标签并推送（推送标签会触发自动 Release）
+git tag v1.2.0 && git push && git push --tags
+```
+
+本地手动打包（可选）：
+
+```bash
+python scripts/build.py        # 产物：dist/lucent-newtab-v<version>.zip
+```
+
 ## 🗂 目录结构
 
 ```
@@ -44,18 +67,28 @@ icons/            扩展图标 16 / 48 / 128
 
 ## 🧭 路线图
 
-### 已完成（2026-08-28）
+### 已完成
 
 - [x] Bing 每日壁纸（按天缓存，取不到自动回退）
 - [x] 卡片自由拖拽布局（分组卡片 ↔ 待办/便签/环境音 可跨区域拖放）
 - [x] 更多环境音：咖啡馆 / 海浪 / 篝火
 - [x] 浅色 / 深色主题切换
+- [x] CI 自动构建 + 标签发版（GitHub Actions）
 
-### 待办
+### 进行中（下一阶段）
+
+- [ ] **搜索引擎自定义管理**（增 / 删 / 改 自定义引擎）
+- [ ] **键盘快捷跳转书签**（数字 / 字母直达）
+- [ ] **番茄钟**专注计时器
+- [ ] **日历**月视图组件
+- [ ] **倒计时 / 纪念日**组件
+
+### 未来
 
 - [ ] 设置项持久化到云端（多设备同步）
 - [ ] 书签批量导入 / 导出为标准 HTML
-- [ ] 番茄钟专注计时器
+- [ ] 上架 Chrome Web Store / Edge 插件商店
+- [ ] i18n 中英双语
 
 ---
 
