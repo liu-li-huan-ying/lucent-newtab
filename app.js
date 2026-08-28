@@ -97,15 +97,55 @@ const WALLPAPERS = {
     'https://images.unsplash.com/photo-1534796638898-225fd21397d4?w=1600&q=80&auto=format&fit=crop',
   ],
 };
-function applyBackground() {
-  let url;
-  if (state.wallpaper.style === 'custom' && state.wallpaper.custom) url = state.wallpaper.custom;
-  else { const arr = WALLPAPERS[state.wallpaper.style] || WALLPAPERS.nature; url = arr[Math.floor(Math.random() * arr.length)]; }
+// 把最终图片贴到页面上（第二层是兜底渐变，图挂了也不至于全黑）
+function paintBg(url) {
   document.body.style.backgroundImage = 'url("' + url + '"), ' + FALLBACK;
   document.body.style.backgroundSize = 'cover, cover';
   document.body.style.backgroundPosition = 'center, center';
   document.body.style.backgroundRepeat = 'no-repeat, no-repeat';
   document.body.style.backgroundAttachment = 'fixed, fixed';
+}
+function randomOf(style) {
+  const arr = WALLPAPERS[style] || WALLPAPERS.nature;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/* 必应每日壁纸：官方接口，按日期缓存一天，取不到就返回 null 交给调用方兜底。
+   注意：作为浏览器扩展运行时可跨域；用本地 http 预览时会被 CORS 拦截，
+   这是正常现象 —— 代码会自动回退到分类壁纸，装成扩展后就正常了。 */
+const BING_CACHE_KEY = 'lucent-bing-cache';
+async function loadBingWallpaper() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(BING_CACHE_KEY) || 'null');
+    const today = new Date().toDateString();
+    if (cached && cached.date === today && cached.url) return cached.url;   // 当天已取过，直接用
+    const r = await fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN');
+    const d = await r.json();
+    const img = d && d.images && d.images[0];
+    if (!img || !img.url) return null;
+    const url = img.url.startsWith('http') ? img.url : 'https://www.bing.com' + img.url;
+    localStorage.setItem(BING_CACHE_KEY, JSON.stringify({ date: today, url, copyright: img.copyright || '' }));
+    return url;
+  } catch (e) { return null; }
+}
+
+async function applyBackground() {
+  let url;
+  if (state.wallpaper.style === 'custom' && state.wallpaper.custom) {
+    url = state.wallpaper.custom;
+  } else if (state.wallpaper.style === 'bing') {
+    url = await loadBingWallpaper();
+    if (url) {
+      const sw = document.querySelector('.swatch[data-style="bing"]');   // 顺手把缩略图换成当日图
+      if (sw) sw.style.backgroundImage = 'url("' + url + '")';
+    } else {
+      url = randomOf(state.wallpaper.style);      // 取不到就回退，绝不留白屏
+      toast('必应壁纸没取到，先用了其他壁纸');
+    }
+  } else {
+    url = randomOf(state.wallpaper.style);
+  }
+  paintBg(url);
 }
 function highlightSwatch() {
   document.querySelectorAll('.swatch').forEach(x => x.classList.remove('on'));
@@ -437,6 +477,12 @@ function bindWallpaper() {
       save(); applyBackground(); highlightSwatch();
     });
   });
+  // 必应缩略图：今天已取过就直接显示，避免第一眼是个空白蓝块
+  try {
+    const c = JSON.parse(localStorage.getItem(BING_CACHE_KEY) || 'null');
+    const bingSw = document.querySelector('.swatch[data-style="bing"]');
+    if (bingSw && c && c.date === new Date().toDateString() && c.url) bingSw.style.backgroundImage = 'url("' + c.url + '")';
+  } catch (e) {}
   document.getElementById('btn-wallpaper').addEventListener('click', () => { state.wallpaper.custom = null; save(); applyBackground(); });
   document.getElementById('btn-custom-wall').addEventListener('click', () => {
     const url = prompt('粘贴图片网址（http(s)://…），留空则从本机选择图片文件：');

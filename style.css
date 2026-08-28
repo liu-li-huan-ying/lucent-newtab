@@ -180,6 +180,13 @@ body {
   background-size: cover; background-position: center;
 }
 .swatch.on { box-shadow: 0 0 0 2px var(--ring), 0 0 12px rgba(120,160,255,.5); }
+/* 必应每日壁纸：缩略图取到之前用蓝色块占位，字母 B 作为标识 */
+.swatch[data-style="bing"] {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
 .custom-btn {
   margin-left: auto; padding: 8px 12px; border-radius: 12px;
   border: 1px solid var(--glass-border); background: var(--fill);

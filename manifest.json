@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "我的主页",
-  "version": "1.0.0",
-  "description": "自定义新标签页：真实照片壁纸 + 轻玻璃（导航/搜索/时钟/天气/待办/便签/环境音）",
+  "name": "Lucent · 轻玻璃新标签页",
+  "version": "1.1.0",
+  "description": "自定义新标签页：真实照片壁纸 + 轻玻璃（导航/搜索/时钟/天气/待办/便签/环境音/主题切换）",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -15,7 +15,8 @@
   "host_permissions": [
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
-    "https://air-quality-api.open-meteo.com/*"
+    "https://air-quality-api.open-meteo.com/*",
+    "https://www.bing.com/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' https: data:; connect-src 'self' https:;"
