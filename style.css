@@ -1,0 +1,278 @@
+/* =========================================================
+   自定义主页 · 方向 D：真实照片壁纸 + 轻玻璃
+   外观只在本文件。关键改动：背景是真实照片（JS 设），
+   加一层 .veil 压暗保证白字可读；玻璃更透更薄。
+   ========================================================= */
+
+/* ---------- 0. 重置 ---------- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+/* 注意：这里不能用 height:100%，否则内容超高时文档不会变高、无法滚动 */
+html { min-height: 100%; }
+
+/* ---------- 1. 页面背景：由 JS 设为照片；这里给兜底渐变 ---------- */
+body {
+  font-family: "SF Pro Display", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #fff;
+  min-height: 100vh;
+  display: flex;
+  /* 关键：这里绝不能用 align-items:center。
+     内容比屏幕高时，居中会让上下各溢出一半，而向上溢出的部分滚不到，
+     顶部的搜索框就被"顶"出屏幕且无法滚回来 —— 表现为"正常倍率下看不见，缩小才看得到"。
+     改成 flex-start + 子元素 margin:auto：空间够时仍居中，不够时顶部对齐且能正常滚动。 */
+  align-items: flex-start;
+  justify-content: center;
+  background: linear-gradient(150deg, #0a1020, #11183a 50%, #07131f);
+  background-attachment: fixed;
+}
+
+/* 压暗蒙版：固定一层黑纱，让白字在亮照片上也清晰 */
+.veil {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.42), rgba(0,0,0,.18) 30%, rgba(0,0,0,.42));
+  opacity: .40;   /* 实际浓度由 JS 按 标准/明亮/深沉 调整 */
+}
+
+/* 内容容器在蒙版之上。
+   加宽到 1180px 适配宽屏显示器；margin:auto 让内容不够高时依然垂直居中，
+   内容超高时自动退化为顶部对齐并可正常滚动（配合上面的 align-items:flex-start）。 */
+.stage { width: min(1180px, 94vw); padding: 34px 30px; margin: auto; position: relative; z-index: 1; }
+
+/* ---------- 2. 轻玻璃：更透、更薄边，让照片透出来 ---------- */
+.glass {
+  position: relative;
+  background: rgba(255,255,255,.14);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  border: 1px solid rgba(255,255,255,.32);
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.5);
+  overflow: hidden;
+}
+.glass::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(140% 90% at 14% -16%, rgba(255,255,255,.30), transparent 50%);
+  pointer-events: none;
+}
+
+/* 统一文字投影，保证在任意照片上都可读 */
+.clock .time, .clock .date, .weather .t, .weather .m,
+.search input, .quote, .card h3, .todo h3, .chip, .item, .hint, .engine, .go {
+  text-shadow: 0 1px 8px rgba(0,0,0,.45);
+}
+
+/* ---------- 3. 顶部栏 ---------- */
+.topbar { display: flex; align-items: center; gap: 20px; padding: 16px 24px; margin-bottom: 26px; }
+.clock .time { font-size: 34px; font-weight: 300; letter-spacing: 1px; line-height: 1; }
+.clock .date { font-size: 13px; opacity: .9; margin-top: 8px; }
+.weather { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.weather .ico { font-size: 28px; }
+.weather .temp { font-size: 20px; font-weight: 500; }
+.weather .meta { font-size: 12px; opacity: .82; }
+.actions { margin-left: auto; display: flex; gap: 10px; }
+.actions button {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.16);
+  color: #fff; font-size: 17px; cursor: pointer; transition: background .2s;
+}
+.actions button:hover { background: rgba(255,255,255,.30); }
+
+/* ---------- 4. 搜索框 ---------- */
+.search { position: relative; display: flex; align-items: center; gap: 14px; padding: 18px 22px; margin-bottom: 16px; overflow: visible; z-index: 30; }
+.engine { font-size: 13px; padding: 8px 14px; border-radius: 14px; background: rgba(255,255,255,.2); white-space: nowrap; cursor: pointer; }
+.search input { flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 17px; }
+.search input::placeholder { color: rgba(255,255,255,.8); }
+.go { font-size: 18px; opacity: .9; cursor: pointer; }
+
+/* 搜索引擎菜单（玻璃小卡片） */
+.engine-menu {
+  position: absolute; top: calc(100% + 10px); left: 18px;
+  display: none; flex-direction: column; min-width: 132px; padding: 6px;
+  background: rgba(255,255,255,.18);
+  backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.35); border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.5);
+  z-index: 40;
+}
+.engine-menu.open { display: flex; }
+.engine-menu div { padding: 10px 14px; font-size: 14px; border-radius: 10px; cursor: pointer; }
+.engine-menu div:hover { background: rgba(255,255,255,.26); }
+.engine-menu div.on { background: rgba(255,255,255,.34); font-weight: 600; }
+
+/* ---------- 5. 每日一句 ---------- */
+.quote { text-align: center; font-style: italic; opacity: .92; font-size: 14px; margin: 4px 0 20px; }
+
+/* ---------- 6. 壁纸风格切换器（缩略图由 JS 填充） ---------- */
+.styles { display: flex; align-items: center; gap: 12px; padding: 12px 18px; margin-bottom: 22px; }
+.styles .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; }
+.swatch {
+  width: 36px; height: 36px; border-radius: 11px;
+  border: 1px solid rgba(255,255,255,.35); cursor: pointer;
+  background-size: cover; background-position: center;
+}
+.swatch.on { box-shadow: 0 0 0 2px #fff, 0 0 12px rgba(255,255,255,.4); }
+.custom-btn {
+  margin-left: auto; padding: 8px 12px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.16);
+  color: #fff; font-size: 13px; cursor: pointer;
+}
+.custom-btn:hover { background: rgba(255,255,255,.30); }
+
+/* 搜索框 / 每日一句 / 壁纸栏：居中并限宽，避免在超宽屏上被拉成一条细长带 */
+.search, .quote, .styles { max-width: 760px; margin-left: auto; margin-right: auto; }
+.quote { margin: 4px auto 20px; }
+
+/* ---------- 7. 卡片区 ---------- */
+/* 自适应列数：宽屏自动多列，分组变多时自动换行 */
+#cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.card, .todo, .notes, .ambient { padding: 18px; transition: transform .2s ease; }
+.card:hover, .todo:hover, .notes:hover, .ambient:hover { transform: translateY(-2px); }
+
+/* 底部三栏：待办 / 便签 / 环境音 横向并排，充分利用宽屏 */
+.extras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+.card h3, .todo h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; opacity: .92; margin: 0 0 14px; }
+.add, .add-todo { margin-left: auto; cursor: pointer; opacity: .75; font-weight: 400; }
+.add:hover, .add-todo:hover { opacity: 1; }
+
+/* 网站链接小方块（无 emoji，纯文字 + 小圆点） */
+.chips { display: flex; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 13px; margin: 0 8px 9px 0; border-radius: 12px;
+  background: rgba(255,255,255,.16); font-size: 13px; cursor: pointer;
+  text-decoration: none; color: inherit;
+}
+.chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.85); }
+.chip:hover { background: rgba(255,255,255,.30); }
+.chip .x { margin-left: 2px; opacity: .55; font-size: 12px; }
+.chip .x:hover { opacity: 1; color: #ff8a8a; }
+
+/* ---------- 8. 待办 ---------- */
+.todo-add { display: flex; gap: 10px; margin-bottom: 12px; }
+.todo-add input { flex: 1; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.14); color: inherit; outline: none; font-size: 14px; }
+.todo-add button { padding: 10px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.2); color: inherit; cursor: pointer; font-size: 14px; }
+.todo-add button:hover { background: rgba(255,255,255,.32); }
+.item { display: flex; align-items: center; gap: 11px; padding: 10px 0; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,.18); }
+.item:last-child { border-bottom: none; }
+.box { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid rgba(255,255,255,.7); cursor: pointer; flex: none; }
+.box.on { background: #34d399; border-color: #34d399; }
+.item .text { flex: 1; cursor: pointer; }
+.done { opacity: .6; text-decoration: line-through; }
+.item .del { opacity: .5; cursor: pointer; }
+.item .del:hover { opacity: 1; color: #ff8a8a; }
+
+/* ---------- 9. 拖拽视觉 ---------- */
+.draggable { cursor: grab; }
+.draggable:active { cursor: grabbing; }
+.dragging { opacity: .45; }
+
+/* ---------- 10. 提示 ---------- */
+.hint { text-align: center; font-size: 12px; opacity: .8; margin-top: 22px; }
+
+/* ---------- 11. 分组头部控件 + 书签 favicon + 拖拽 ---------- */
+.card h3 { display: flex; align-items: center; gap: 8px; }
+.grp-name { text-transform: uppercase; letter-spacing: 1.2px; }
+.grp-tools { margin-left: auto; display: flex; gap: 9px; opacity: .7; font-weight: 400; }
+.grp-tools span { cursor: pointer; }
+.grp-tools span:hover { opacity: 1; color: #ffd479; }
+.chip .fav { width: 16px; height: 16px; border-radius: 4px; margin-right: 4px; object-fit: cover; background: rgba(255,255,255,.25); }
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.85); margin-right: 5px; }
+.chip[draggable="true"] { cursor: grab; }
+.chip.dragging { opacity: .4; }
+.add-group-btn {
+  display: block; width: 100%; margin: 14px 0 4px; padding: 12px;
+  border-radius: 16px; border: 1px dashed rgba(255,255,255,.4);
+  background: transparent; color: #fff; cursor: pointer; font-size: 14px;
+}
+.add-group-btn:hover { background: rgba(255,255,255,.10); }
+
+/* 组件显隐 */
+.hidden { display: none !important; }
+
+/* ---------- 12. 设置中心弹窗 ---------- */
+.modal-mask {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: none; align-items: center; justify-content: center; z-index: 60;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.modal-mask.open { display: flex; }
+.modal { width: min(420px, 92vw); max-height: 86vh; overflow: auto; padding: 22px 24px; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.modal-head h2 { font-size: 18px; font-weight: 600; }
+.x-btn { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; }
+.modal-body .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.12); }
+.modal-body .row.col { flex-direction: column; align-items: flex-start; }
+.modal-body .row > span { font-size: 14px; opacity: .9; }
+.modal-body select, .modal-body input[type=range] {
+  background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.3);
+  border-radius: 10px; padding: 8px 10px; font-size: 14px; max-width: 200px;
+}
+.modal-body select option { color: #000; }
+.chk { font-size: 13px; opacity: .92; margin: 4px 0; cursor: pointer; }
+.data-btns { display: flex; gap: 10px; margin-top: 8px; }
+.data-btns button {
+  padding: 9px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.16); color: #fff; cursor: pointer; font-size: 13px;
+}
+.data-btns button:hover { background: rgba(255,255,255,.30); }
+/* 恢复默认：用一点红边提示这是有风险的操作 */
+.data-btns #set-reset { border-color: rgba(255,150,150,.55); }
+.data-btns #set-reset:hover { background: rgba(255,120,120,.28); }
+
+/* ---------- 13. 响应式（按屏宽逐级收窄列数） ---------- */
+/* 中等屏：底部三栏变两栏 */
+@media (max-width: 980px) {
+  .extras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .stage { padding: 22px 16px; width: 96vw; }
+  .topbar { flex-wrap: wrap; gap: 14px; padding: 14px 18px; }
+  .clock .time { font-size: 28px; }
+  .weather { width: 100%; order: 3; }
+  .actions { margin-left: auto; }
+  .search { flex-wrap: wrap; }
+  .search input { width: 100%; order: 3; }
+  #cards { grid-template-columns: 1fr; }
+  #card-todo { grid-column: auto; }
+  .extras { grid-template-columns: 1fr; }
+  .weather-pop { left: 12px; right: 12px; top: auto; bottom: 12px; }
+  .modal { width: 94vw; }
+  .hint { font-size: 11px; line-height: 1.6; }
+}
+
+/* ---------- 14. 天气详情弹窗（多日预报 + 城市 + AQI） ---------- */
+/* 弹窗是 .stage 的直接子元素（不在 .glass 内），所以不会被 overflow:hidden 裁掉。
+   顶栏变宽后，天气在左侧（紧跟时钟），所以弹窗靠左对齐，视觉上才连得上。 */
+.weather-pop {
+  position: absolute; top: 92px; left: 30px; width: 320px; max-width: 86vw;
+  padding: 16px 18px; display: none; z-index: 50;
+}
+.weather-pop.open { display: block; }
+.weather-pop .wp-head { display: flex; align-items: center; justify-content: space-between; font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+.weather-pop .wp-search { display: flex; gap: 8px; margin-bottom: 10px; }
+.weather-pop .wp-search input { flex: 1; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.14); color: #fff; outline: none; font-size: 13px; }
+.weather-pop .wp-search button { padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.2); color: #fff; cursor: pointer; }
+.weather-pop .wp-aqi { font-size: 13px; opacity: .9; margin-bottom: 12px; }
+.weather-pop .wp-empty { font-size: 13px; opacity: .78; padding: 10px 2px; }
+.weather-pop .wp-days { display: flex; gap: 8px; }
+.weather-pop .wp-day { flex: 1; text-align: center; padding: 10px 4px; border-radius: 12px; background: rgba(255,255,255,.12); }
+.weather-pop .wp-day .wd { font-size: 12px; opacity: .85; }
+.weather-pop .wp-day .wi { font-size: 22px; margin: 4px 0; }
+.weather-pop .wp-day .wt { font-size: 12px; opacity: .9; }
+
+/* ---------- 15. 便签 / 环境音 ---------- */
+/* 内边距与悬停效果统一在「7. 卡片区」定义，这里只管各自的内容样式 */
+.notes h3, .ambient h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; opacity: .92; margin: 0 0 12px; display: flex; align-items: center; }
+.notes textarea { width: 100%; min-height: 90px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.14); color: #fff; outline: none; font-size: 14px; line-height: 1.5; font-family: inherit; }
+.notes textarea::placeholder { color: rgba(255,255,255,.6); }
+.amb-row { display: flex; gap: 10px; margin-bottom: 12px; }
+.amb-row select { flex: 1; padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.16); color: #fff; font-size: 14px; }
+.amb-row select option { color: #000; }
+.amb-row button { padding: 9px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.2); color: #fff; cursor: pointer; font-size: 14px; }
+.amb-row button.on { background: rgba(120,200,140,.4); border-color: rgba(120,200,140,.7); }
+.ambient input[type=range] { width: 100%; accent-color: #8fd3a0; }
+
+/* ---------- 16. 快捷键帮助弹窗 ---------- */
+.kbd-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,.12); font-size: 14px; }
+.kbd-row:last-child { border-bottom: none; }
+.kbd-row .key { min-width: 56px; text-align: center; padding: 6px 10px; border-radius: 9px; background: rgba(255,255,255,.2); border: 1px solid rgba(255,255,255,.3); font-size: 13px; font-weight: 600; }
+.kbd-row span:last-child { opacity: .92; }
