@@ -15,7 +15,9 @@ function defaults() {
   return {
     veil: 0.40,                                    // 蒙版浓度（明暗）
     theme: 'dark',                                 // 主题：dark 深色（白字） / light 浅色（深字）
-    wallpaper: { style: 'nature', custom: null },  // 壁纸分类 或 'custom'
+    // 壁纸：style = 分类名 / 'custom' / 'bing'
+    // idx 记住每个分类「当前第几张」，保证点同一个分类永远是同一张，不再随机跳变
+    wallpaper: { style: 'nature', custom: null, idx: { nature: 0, city: 0, minimal: 0, abstract: 0 } },
     engine: 'bing',                               // 默认搜索引擎（必应）
     components: {                                  // 各组件是否显示
       clock: true, weather: true, search: true,
@@ -65,6 +67,9 @@ function load() {
       // 组件开关逐项合并：旧版本数据里没有的新组件按默认(显示)处理，
       // 否则升级后新增的组件会因为「没有这个开关」而被误判为隐藏。
       d.components = Object.assign({}, baseComponents, s.components || {});
+      // 兼容旧存档：wallpaper 是整体覆盖的，旧数据里没有 idx 字段，这里补齐
+      d.wallpaper = Object.assign({ style: 'nature', custom: null, idx: {} }, d.wallpaper || {});
+      if (!d.wallpaper.idx || typeof d.wallpaper.idx !== 'object') d.wallpaper.idx = {};
     }
   } catch (e) {}
   return d;
@@ -73,7 +78,7 @@ function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 
 let state = load();
 
-/* ---------- 1. 壁纸：真实照片（按分类存几张，随机取） ---------- */
+/* ---------- 1. 壁纸：真实照片（每类存几张，按记住的位置取，不随机） ---------- */
 const FALLBACK = 'linear-gradient(150deg, #0a1020, #11183a 50%, #07131f)';
 const WALLPAPERS = {
   nature: [
@@ -105,9 +110,38 @@ function paintBg(url) {
   document.body.style.backgroundRepeat = 'no-repeat, no-repeat';
   document.body.style.backgroundAttachment = 'fixed, fixed';
 }
-function randomOf(style) {
-  const arr = WALLPAPERS[style] || WALLPAPERS.nature;
-  return arr[Math.floor(Math.random() * arr.length)];
+const WALL_LABEL = { nature: '自然', city: '城市', minimal: '极简', abstract: '抽象' };
+
+// 取「当前分类 + 记住的位置」那张图。确定性：同一个分类每次都返回同一张。
+function pickOf(style) {
+  const key = WALLPAPERS[style] ? style : 'nature';
+  const arr = WALLPAPERS[key];
+  let i = (state.wallpaper.idx || {})[key] || 0;
+  if (i >= arr.length) i = 0;          // 存档下标越界（比如图删减过）时归零，避免取到 undefined
+  return arr[i];
+}
+// 让色块缩略图显示「该分类当前这张」，做到缩略图所见 = 背景所得
+function syncSwatchThumb(style) {
+  const sw = document.querySelector('.swatch[data-style="' + style + '"]');
+  if (!sw) return;
+  const arr = WALLPAPERS[style];
+  if (!arr) return;                    // 必应色块由 loadBingWallpaper 自己更新
+  let i = (state.wallpaper.idx || {})[style] || 0;
+  if (i >= arr.length) i = 0;
+  sw.style.backgroundImage = 'url("' + arr[i] + '")';
+  sw.title = WALL_LABEL[style] + '（第 ' + (i + 1) + '/' + arr.length + ' 张，按 W 或 🎲 换一张）';
+}
+// 显式「换一张」：位置 +1 循环。只有这个动作（🎲 按钮 / W 键）会换图，点分类色块不会。
+function nextWallpaper() {
+  const style = state.wallpaper.style;
+  if (style === 'bing')   { toast('必应每日壁纸每天自动更新，无需手动换'); return; }
+  if (style === 'custom') { toast('当前用的是自定义图片，换一张请先选个分类'); return; }
+  const key = WALLPAPERS[style] ? style : 'nature';
+  const arr = WALLPAPERS[key];
+  state.wallpaper.idx = state.wallpaper.idx || {};
+  state.wallpaper.idx[key] = ((state.wallpaper.idx[key] || 0) + 1) % arr.length;
+  save(); applyBackground();
+  toast(WALL_LABEL[key] + ' 第 ' + (state.wallpaper.idx[key] + 1) + '/' + arr.length + ' 张');
 }
 
 /* 必应每日壁纸：官方接口，按日期缓存一天，取不到就返回 null 交给调用方兜底。
@@ -139,11 +173,12 @@ async function applyBackground() {
       const sw = document.querySelector('.swatch[data-style="bing"]');   // 顺手把缩略图换成当日图
       if (sw) sw.style.backgroundImage = 'url("' + url + '")';
     } else {
-      url = randomOf(state.wallpaper.style);      // 取不到就回退，绝不留白屏
+      url = pickOf('nature');                     // 取不到就回退，绝不留白屏
       toast('必应壁纸没取到，先用了其他壁纸');
     }
   } else {
-    url = randomOf(state.wallpaper.style);
+    url = pickOf(state.wallpaper.style);
+    syncSwatchThumb(state.wallpaper.style);       // 缩略图与背景始终保持一致
   }
   paintBg(url);
 }
@@ -470,8 +505,7 @@ function showQuote() {
 /* ---------- 9. 壁纸切换 + 自定义 ---------- */
 function bindWallpaper() {
   document.querySelectorAll('.swatch').forEach(sw => {
-    const arr = WALLPAPERS[sw.dataset.style];
-    if (arr) sw.style.backgroundImage = 'url("' + arr[0] + '")';
+    syncSwatchThumb(sw.dataset.style);          // 缩略图显示该分类「当前这张」，不再固定第一张
     sw.addEventListener('click', () => {
       state.wallpaper.style = sw.dataset.style; state.wallpaper.custom = null;
       save(); applyBackground(); highlightSwatch();
@@ -483,7 +517,7 @@ function bindWallpaper() {
     const bingSw = document.querySelector('.swatch[data-style="bing"]');
     if (bingSw && c && c.date === new Date().toDateString() && c.url) bingSw.style.backgroundImage = 'url("' + c.url + '")';
   } catch (e) {}
-  document.getElementById('btn-wallpaper').addEventListener('click', () => { state.wallpaper.custom = null; save(); applyBackground(); });
+  document.getElementById('btn-wallpaper').addEventListener('click', nextWallpaper);
   document.getElementById('btn-custom-wall').addEventListener('click', () => {
     const url = prompt('粘贴图片网址（http(s)://…），留空则从本机选择图片文件：');
     if (url && /^https?:\/\//.test(url)) { setCustom(url); return; }
@@ -763,7 +797,7 @@ function bindKeys() {
       return;
     }
     if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); }
-    else if (e.key === 'w' || e.key === 'W') { state.wallpaper.custom = null; save(); applyBackground(); }
+    else if (e.key === 'w' || e.key === 'W') { nextWallpaper(); }
     else if (e.key === 't' || e.key === 'T') { toggleTheme(); }
     else if (e.key === '?') { toggleKbd(); }
   });
