@@ -14,6 +14,7 @@ const KEY = 'my-homepage-v1';
 function defaults() {
   return {
     veil: 0.40,                                    // 蒙版浓度（明暗）
+    theme: 'dark',                                 // 主题：dark 深色（白字） / light 浅色（深字）
     wallpaper: { style: 'nature', custom: null },  // 壁纸分类 或 'custom'
     engine: 'bing',                               // 默认搜索引擎（必应）
     components: {                                  // 各组件是否显示
@@ -119,6 +120,17 @@ const VEIL_PRESETS = [0.22, 0.40, 0.60];   // 明亮 / 标准 / 深沉
 const VEIL_LABEL = ['明亮', '标准', '深沉'];
 let veilIdx = VEIL_PRESETS.indexOf(state.veil) >= 0 ? VEIL_PRESETS.indexOf(state.veil) : 1;
 function applyVeil() { document.querySelector('.veil').style.opacity = state.veil; }
+
+/* 主题：深色是默认（CSS 里 :root 的默认值）；
+   切到浅色时给 body 加 data-theme="light"，配色由 CSS 变量整体翻转。 */
+function applyTheme() {
+  document.body.dataset.theme = state.theme === 'light' ? 'light' : 'dark';
+}
+function toggleTheme() {
+  state.theme = state.theme === 'light' ? 'dark' : 'light';
+  save(); applyTheme();
+  toast('主题：' + (state.theme === 'light' ? '浅色' : '深色'));
+}
 
 /* ---------- 3. 时钟 ---------- */
 function tick() {
@@ -531,6 +543,7 @@ function bindSettings() {
     document.getElementById('set-engine').value = state.engine;
     document.getElementById('set-wall').value = state.wallpaper.style === 'custom' ? 'nature' : state.wallpaper.style;
     document.getElementById('set-veil').value = state.veil;
+    document.getElementById('set-theme').value = state.theme === 'light' ? 'light' : 'dark';
     document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => { cb.checked = state.components[cb.dataset.comp]; });
     modal.classList.add('open');
   };
@@ -543,6 +556,8 @@ function bindSettings() {
   document.getElementById('set-wall').addEventListener('change', e => { state.wallpaper.style = e.target.value; state.wallpaper.custom = null; save(); applyBackground(); highlightSwatch(); });
   // 蒙版浓度
   document.getElementById('set-veil').addEventListener('input', e => { state.veil = parseFloat(e.target.value); save(); applyVeil(); });
+  // 主题（深色 / 浅色）
+  document.getElementById('set-theme').addEventListener('change', e => { state.theme = e.target.value; save(); applyTheme(); });
   // 组件显隐
   document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => {
     cb.addEventListener('change', () => { state.components[cb.dataset.comp] = cb.checked; save(); applyComponents(); });
@@ -703,6 +718,7 @@ function bindKeys() {
     }
     if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); }
     else if (e.key === 'w' || e.key === 'W') { state.wallpaper.custom = null; save(); applyBackground(); }
+    else if (e.key === 't' || e.key === 'T') { toggleTheme(); }
     else if (e.key === '?') { toggleKbd(); }
   });
 }
@@ -761,7 +777,7 @@ function init() {
   // 每一步单独兜错：任何一步出错只影响它自己，不会让整页变空白
   const steps = [
     populateEngineSelect, renderGroups, renderTodos, updateEngineLabel,
-    applyBackground, applyVeil, highlightSwatch, applyComponents, showQuote,
+    applyBackground, applyVeil, applyTheme, highlightSwatch, applyComponents, showQuote,
     initWeatherPop, bindEvents,
   ];
   steps.forEach(fn => {
