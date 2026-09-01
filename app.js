@@ -301,7 +301,7 @@ function renderWeatherPop(name, daily) {
   const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const hasData = !!(daily && daily.time && daily.time.length);
   let html = '<div class="wp-head"><span>' + escapeHtml(name || '天气') + '</span>' +
-    '<button id="wp-close" class="x-btn">✕</button></div>' +
+    '<button id="wp-close" class="x-btn" aria-label="关闭天气详情">✕</button></div>' +
     '<div class="wp-search"><input id="wp-city" placeholder="切换城市，如 上海" />' +
     '<button id="wp-go">查询</button></div>' +
     '<div class="wp-aqi" id="wp-aqi">' +
@@ -400,6 +400,7 @@ function makeChip(g, b, i) {
   a.appendChild(img);
   const name = document.createElement('span'); name.textContent = b.name; a.appendChild(name);
   const x = document.createElement('span'); x.className = 'x'; x.title = '删除'; x.textContent = '✕';
+  x.setAttribute('role', 'button'); x.setAttribute('tabindex', '0'); x.setAttribute('aria-label', '删除书签 ' + b.name); keyActivate(x);
   x.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); state.bookmarks[g].splice(i, 1); save(); renderGroups(); });
   a.appendChild(x);
   // 书签拖拽排序
@@ -422,6 +423,11 @@ function renderGroups() {
       '</span></h3>' +
       '<div class="chips" data-group="' + g + '"></div>';
     cards.appendChild(card);
+    card.querySelectorAll('.grp-tools span').forEach(s => {
+      s.setAttribute('role', 'button'); s.setAttribute('tabindex', '0');
+      const lbl = s.classList.contains('add') ? '添加链接' : s.classList.contains('rename') ? '重命名分组' : '删除分组';
+      s.setAttribute('aria-label', lbl); keyActivate(s);
+    });
     const box = card.querySelector('.chips');
     if (state.bookmarks[g].length) {
       state.bookmarks[g].forEach((b, i) => box.appendChild(makeChip(g, b, i)));
@@ -515,11 +521,13 @@ function renderTodos() {
     div.className = 'item';
     div.innerHTML = '<span class="box ' + (t.done ? 'on' : '') + '"></span>' +
       '<span class="text ' + (t.done ? 'done' : '') + '">' + escapeHtml(t.text) + '</span>' +
-      '<span class="del" title="删除">✕</span>';
+      '<span class="del" role="button" tabindex="0" title="删除" aria-label="删除待办">✕</span>';
     const toggle = () => { state.todos[i].done = !state.todos[i].done; save(); renderTodos(); };
     div.querySelector('.box').addEventListener('click', toggle);
     div.querySelector('.text').addEventListener('click', toggle);
-    div.querySelector('.del').addEventListener('click', () => { state.todos.splice(i, 1); save(); renderTodos(); });
+    const del = div.querySelector('.del');
+    del.addEventListener('click', () => { state.todos.splice(i, 1); save(); renderTodos(); });
+    keyActivate(del);
     list.appendChild(div);
   });
 }
@@ -549,6 +557,7 @@ function bindWallpaper() {
       state.wallpaper.style = sw.dataset.style; state.wallpaper.custom = null;
       save(); applyBackground(); highlightSwatch();
     });
+    keyActivate(sw);
   });
   // 必应缩略图：今天已取过就直接显示，避免第一眼是个空白蓝块
   try {
@@ -660,7 +669,7 @@ function renderEngineManager() {
   keys.forEach(k => {
     const e = custom[k];
     const row = document.createElement('div'); row.className = 'eng-item';
-    row.innerHTML = '<span class="eng-name"></span><button class="eng-del" title="删除">✕</button>';
+    row.innerHTML = '<span class="eng-name"></span><button class="eng-del" title="删除" aria-label="删除搜索引擎">✕</button>';
     row.querySelector('.eng-name').textContent = e.name + '（' + k + '）';
     row.querySelector('.eng-del').addEventListener('click', () => {
       delete state.engines[k];
@@ -677,10 +686,10 @@ function refreshEngines() {
   // 重建搜索框菜单
   const menu = document.getElementById('engine-menu'); menu.innerHTML = '';
   Object.entries(allEngines()).forEach(([k, v]) => {
-    const d = document.createElement('div'); d.textContent = v.name; d.dataset.key = k;
+    const d = document.createElement('div'); d.textContent = v.name; d.dataset.key = k; d.setAttribute('role', 'button'); d.setAttribute('tabindex', '0'); d.setAttribute('aria-label', '选择搜索引擎：' + v.name); keyActivate(d);
     if (k === state.engine) d.classList.add('on');
     d.addEventListener('click', () => {
-      state.engine = k; save(); updateEngineLabel(); menu.classList.remove('open');
+      state.engine = k; save(); updateEngineLabel(); menu.classList.remove('open'); document.getElementById('engine-label').setAttribute('aria-expanded', 'false');
       menu.querySelectorAll('div').forEach(x => x.classList.remove('on')); d.classList.add('on');
     });
     menu.appendChild(d);
@@ -775,7 +784,10 @@ function bindNotes() {
   if (state.notes) ta.value = state.notes;
   ta.addEventListener('input', () => { state.notes = ta.value; save(); });   // 实时保存
   const clear = document.querySelector('#comp-notes .add-todo');
-  if (clear) clear.addEventListener('click', () => { if (confirm('清空便签？')) { ta.value = ''; state.notes = ''; save(); } });
+  if (clear) {
+    clear.addEventListener('click', () => { if (confirm('清空便签？')) { ta.value = ''; state.notes = ''; save(); } });
+    keyActivate(clear);
+  }
 }
 // 环境音：用 Web Audio 实时生成噪音（无需任何外部文件）
 let audioCtx = null, noiseNode = null, noiseGain = null, noiseLfo = null, noiseLfoGain = null;
@@ -986,15 +998,19 @@ function renderCountdown() {
     const diff = daysBetween(now, target);
     const row = document.createElement('div'); row.className = 'cd-item';
     const txt = diff === 0 ? '就是今天 🎉' : (diff > 0 ? '还有 ' + diff + ' 天' : '已过 ' + (-diff) + ' 天');
-    row.innerHTML = '<span class="cd-name"></span><span class="cd-days">' + txt + '</span><span class="cd-del" title="删除">✕</span>';
+    row.innerHTML = '<span class="cd-name"></span><span class="cd-days">' + txt + '</span><span class="cd-del" role="button" tabindex="0" title="删除" aria-label="删除倒计时">✕</span>';
     row.querySelector('.cd-name').textContent = ev.name + '（' + ev.date + '）';
-    row.querySelector('.cd-del').addEventListener('click', () => { state.events.splice(i, 1); save(); renderCountdown(); });
+    const cdDel = row.querySelector('.cd-del');
+    cdDel.addEventListener('click', () => { state.events.splice(i, 1); save(); renderCountdown(); });
+    keyActivate(cdDel);
     list.appendChild(row);
   });
 }
 function bindCountdown() {
   const row = document.getElementById('cd-add-row');
-  document.getElementById('cd-add').addEventListener('click', () => { row.hidden = !row.hidden; });
+  const cdAdd = document.getElementById('cd-add');
+  cdAdd.addEventListener('click', () => { row.hidden = !row.hidden; });
+  keyActivate(cdAdd);
   document.getElementById('cd-save').addEventListener('click', () => {
     const name = document.getElementById('cd-name').value.trim();
     const date = document.getElementById('cd-date').value;
@@ -1013,28 +1029,36 @@ function bindEvents() {
   Object.entries(allEngines()).forEach(([k, v]) => {
     const d = document.createElement('div');
     d.textContent = v.name; d.dataset.key = k;
+    d.setAttribute('role', 'button'); d.setAttribute('tabindex', '0'); d.setAttribute('aria-label', '选择搜索引擎：' + v.name); keyActivate(d);
     if (k === state.engine) d.classList.add('on');
     d.addEventListener('click', () => {
-      state.engine = k; save(); updateEngineLabel(); menu.classList.remove('open');
+      state.engine = k; save(); updateEngineLabel(); menu.classList.remove('open'); document.getElementById('engine-label').setAttribute('aria-expanded', 'false');
       menu.querySelectorAll('div').forEach(x => x.classList.remove('on')); d.classList.add('on');
     });
     menu.appendChild(d);
   });
-  document.getElementById('engine-label').addEventListener('click', () => menu.classList.toggle('open'));
+  const engLabel = document.getElementById('engine-label');
+  const toggleEngMenu = () => { const open = menu.classList.toggle('open'); engLabel.setAttribute('aria-expanded', open ? 'true' : 'false'); };
+  engLabel.addEventListener('click', toggleEngMenu);
+  keyActivate(engLabel);
   document.addEventListener('click', e => {
-    if (!menu.contains(e.target) && !document.getElementById('engine-label').contains(e.target)) menu.classList.remove('open');
+    if (!menu.contains(e.target) && !document.getElementById('engine-label').contains(e.target)) { menu.classList.remove('open'); engLabel.setAttribute('aria-expanded', 'false'); }
   });
 
   // 搜索
   const input = document.getElementById('search-input');
   input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
-  document.getElementById('search-go').addEventListener('click', doSearch);
+  const goBtn = document.getElementById('search-go');
+  goBtn.addEventListener('click', doSearch);
+  keyActivate(goBtn);
 
   // 待办
   const todoInput = document.getElementById('todo-input');
   todoInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
   document.getElementById('todo-add-btn').addEventListener('click', addTodo);
-  document.querySelector('.add-todo').addEventListener('click', () => todoInput.focus());
+  const todoAdd = document.querySelector('.add-todo');
+  todoAdd.addEventListener('click', () => todoInput.focus());
+  keyActivate(todoAdd);
 
   bindGroupActions();
   bindTheme();
@@ -1066,7 +1090,8 @@ function applyFolds() {
     const card = document.getElementById('comp-' + id); if (!card) return;
     const folded = !!(state.collapsed && state.collapsed[id]);
     card.classList.toggle('folded', folded);
-    const btn = card.querySelector('.fold'); if (btn) btn.classList.toggle('folded', folded);
+    const btn = card.querySelector('.fold');
+    if (btn) { btn.classList.toggle('folded', folded); btn.setAttribute('aria-expanded', folded ? 'false' : 'true'); }
   });
 }
 function bindFolds() {
@@ -1078,6 +1103,15 @@ function bindFolds() {
       state.collapsed[id] = !state.collapsed[id];
       save(); applyFolds();
     });
+    keyActivate(btn);
+  });
+}
+
+// 让 role=button 的 span 也能用键盘（Enter / 空格）激活，触发其已绑定的 click 逻辑
+function keyActivate(el) {
+  if (!el) return;
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
   });
 }
 

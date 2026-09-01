@@ -29,9 +29,9 @@
         </div>
       </div>
       <div class="actions">
-        <button id="btn-wallpaper" title="换一张壁纸（快捷键 W）">🎲</button>
-        <button id="btn-theme" title="切换 标准/明亮/深沉">🌗</button>
-        <button id="btn-settings" title="设置">⚙</button>
+        <button id="btn-wallpaper" title="换一张壁纸（快捷键 W）" aria-label="换一张壁纸">🎲</button>
+        <button id="btn-theme" title="切换 标准/明亮/深沉" aria-label="切换明暗主题">🌗</button>
+        <button id="btn-settings" title="设置" aria-label="打开设置">⚙</button>
       </div>
     </div>
 
@@ -40,10 +40,10 @@
 
     <!-- 搜索框 -->
     <div class="glass search" id="comp-search">
-      <span class="engine" id="engine-label">必应 ▾</span>
+      <span class="engine" id="engine-label" role="button" tabindex="0" aria-label="选择搜索引擎" aria-haspopup="true" aria-expanded="false">必应 ▾</span>
       <div class="engine-menu" id="engine-menu"></div>
       <input id="search-input" placeholder="搜索，或输入算式如 1+1 …" autocomplete="off" />
-      <span class="go" id="search-go">→</span>
+      <span class="go" id="search-go" role="button" tabindex="0" aria-label="搜索">→</span>
     </div>
 
     <!-- 每日一句 -->
@@ -52,12 +52,12 @@
     <!-- 壁纸风格切换器（缩略图由 JS 填入） -->
     <div class="glass styles" id="comp-styles">
       <span class="label">壁纸</span>
-      <div class="swatch" data-style="nature" title="自然"></div>
-      <div class="swatch" data-style="city" title="城市"></div>
-      <div class="swatch" data-style="minimal" title="极简"></div>
-      <div class="swatch" data-style="abstract" title="抽象"></div>
-      <div class="swatch" data-style="bing" title="必应每日壁纸（每天自动更新）">B</div>
-      <button class="custom-btn" id="btn-custom-wall" title="用自己的图片">＋图</button>
+      <div class="swatch" data-style="nature" role="button" tabindex="0" title="自然" aria-label="壁纸：自然"></div>
+      <div class="swatch" data-style="city" role="button" tabindex="0" title="城市" aria-label="壁纸：城市"></div>
+      <div class="swatch" data-style="minimal" role="button" tabindex="0" title="极简" aria-label="壁纸：极简"></div>
+      <div class="swatch" data-style="abstract" role="button" tabindex="0" title="抽象" aria-label="壁纸：抽象"></div>
+      <div class="swatch" data-style="bing" role="button" tabindex="0" title="必应每日壁纸（每天自动更新）" aria-label="壁纸：必应每日（每天自动更新）">B</div>
+      <button class="custom-btn" id="btn-custom-wall" title="用自己的图片" aria-label="上传自定义壁纸">＋图</button>
     </div>
 
     <!-- 可拖拽卡片区：网站分组（JS 动态生成）+ 待办 -->
@@ -69,7 +69,7 @@
 
     <!-- 待办（固定，不随分组变化） -->
     <div class="glass todo draggable" id="comp-todo" data-id="todo">
-      <h3>To-do <span class="add-todo" title="添加待办">＋</span></h3>
+      <h3>To-do <span class="add-todo" role="button" tabindex="0" title="添加待办" aria-label="添加待办">＋</span></h3>
       <div class="todo-add">
         <input id="todo-input" placeholder="写点什么…" autocomplete="off" />
         <button id="todo-add-btn">添加</button>
@@ -79,7 +79,7 @@
 
     <!-- 四期④：便签（随手记，自动保存） -->
     <div class="glass notes draggable" id="comp-notes" data-id="notes">
-      <h3>便签 <span class="add-todo" title="清空便签">🗑</span></h3>
+      <h3>便签 <span class="add-todo" role="button" tabindex="0" title="清空便签" aria-label="清空便签">🗑</span></h3>
       <textarea id="notes-area" placeholder="随手记点什么…（自动保存）"></textarea>
     </div>
 
@@ -104,7 +104,7 @@
 
     <!-- D1：番茄钟 / 专注计时 -->
     <div class="glass pomodoro draggable" id="comp-pomodoro" data-id="pomodoro">
-      <h3>番茄钟 <span class="fold" data-fold="pomodoro" title="折叠 / 展开">▾</span></h3>
+      <h3>番茄钟 <span class="fold" data-fold="pomodoro" role="button" tabindex="0" title="折叠 / 展开" aria-label="折叠 / 展开 番茄钟" aria-expanded="false">▾</span></h3>
       <div class="pomo-ring"><svg viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="52"/><circle class="ring-fg" id="pomo-ring" cx="60" cy="60" r="52"/></svg><span class="pomo-time" id="pomo-time">25:00</span></div>
       <div class="pomo-mode" id="pomo-mode">专注</div>
       <div class="pomo-btns">
@@ -119,14 +119,14 @@
 
     <!-- D2：日历 -->
     <div class="glass calendar draggable" id="comp-calendar" data-id="calendar">
-      <h3>日历 <span class="cal-nav"><button id="cal-prev" title="上个月">‹</button><button id="cal-next" title="下个月">›</button></span> <span class="fold" data-fold="calendar" title="折叠 / 展开">▾</span></h3>
+      <h3>日历 <span class="cal-nav"><button id="cal-prev" title="上个月" aria-label="上个月">‹</button><button id="cal-next" title="下个月" aria-label="下个月">›</button></span> <span class="fold" data-fold="calendar" role="button" tabindex="0" title="折叠 / 展开" aria-label="折叠 / 展开 日历" aria-expanded="false">▾</span></h3>
       <div class="cal-head" id="cal-head"></div>
       <div class="cal-grid" id="cal-grid"></div>
     </div>
 
     <!-- D3：倒计时 / 纪念日 -->
     <div class="glass countdown draggable" id="comp-countdown" data-id="countdown">
-      <h3>倒计时 <span class="add-todo" id="cd-add" title="添加目标">＋</span> <span class="fold" data-fold="countdown" title="折叠 / 展开">▾</span></h3>
+      <h3>倒计时 <span class="add-todo" id="cd-add" role="button" tabindex="0" title="添加目标" aria-label="添加倒计时">＋</span> <span class="fold" data-fold="countdown" role="button" tabindex="0" title="折叠 / 展开" aria-label="折叠 / 展开 倒计时" aria-expanded="false">▾</span></h3>
       <div class="cd-add-row" id="cd-add-row" hidden>
         <input id="cd-name" placeholder="名称，如 生日" autocomplete="off" />
         <input id="cd-date" type="date" />
@@ -145,7 +145,7 @@
     <div class="glass modal">
       <div class="modal-head">
         <h2>设置</h2>
-        <button id="set-close" class="x-btn">✕</button>
+        <button id="set-close" class="x-btn" aria-label="关闭设置">✕</button>
       </div>
       <div class="modal-body">
         <label class="row"><span>默认搜索引擎</span>
