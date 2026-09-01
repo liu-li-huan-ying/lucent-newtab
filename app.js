@@ -26,6 +26,7 @@ function defaults() {
       notes: true, ambient: true,                // 四期新增：便签 / 环境音
       pomodoro: true, calendar: true, countdown: true,  // D 系列新组件
     },
+    collapsed: {},                                // 工具组件折叠态：{ pomodoro:true, ... }
     pomodoro: { work: 25, break: 5 },             // 番茄钟时长（分钟），仅记设置不记运行态
     events: [],                                    // D3 倒计时/纪念日：[{ name, date:'YYYY-MM-DD' }]
     weather: { name: '北京', lat: 39.9042, lon: 116.4074 }, // 四期：记住城市
@@ -422,7 +423,11 @@ function renderGroups() {
       '<div class="chips" data-group="' + g + '"></div>';
     cards.appendChild(card);
     const box = card.querySelector('.chips');
-    state.bookmarks[g].forEach((b, i) => box.appendChild(makeChip(g, b, i)));
+    if (state.bookmarks[g].length) {
+      state.bookmarks[g].forEach((b, i) => box.appendChild(makeChip(g, b, i)));
+    } else {
+      box.innerHTML = '<span class="tip empty-hint">还没有链接，点 ＋ 添加</span>';
+    }
     // 书签区内拖拽
     box.addEventListener('dragover', e => {
       e.preventDefault();
@@ -504,6 +509,7 @@ function bindGroupActions() {
 function renderTodos() {
   const list = document.getElementById('todo-list');
   list.innerHTML = '';
+  if (!state.todos.length) { list.innerHTML = '<p class="tip empty-hint">还没有待办，添加一件小事吧 ✦</p>'; return; }
   state.todos.forEach((t, i) => {
     const div = document.createElement('div');
     div.className = 'item';
@@ -1040,6 +1046,7 @@ function bindEvents() {
   bindPomodoro();
   bindCalendar();
   bindCountdown();
+  bindFolds();
   bindKeys();
 
   // 四期④：天气弹窗开关 + 点击外部关闭
@@ -1053,11 +1060,32 @@ function bindEvents() {
 }
 
 /* ---------- 16. 启动 ---------- */
+/* ---------- 14.5 工具组件折叠（密度管理） ---------- */
+function applyFolds() {
+  ['pomodoro', 'calendar', 'countdown'].forEach(id => {
+    const card = document.getElementById('comp-' + id); if (!card) return;
+    const folded = !!(state.collapsed && state.collapsed[id]);
+    card.classList.toggle('folded', folded);
+    const btn = card.querySelector('.fold'); if (btn) btn.classList.toggle('folded', folded);
+  });
+}
+function bindFolds() {
+  document.querySelectorAll('.fold').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.fold;
+      state.collapsed = state.collapsed || {};
+      state.collapsed[id] = !state.collapsed[id];
+      save(); applyFolds();
+    });
+  });
+}
+
 function init() {
   // 每一步单独兜错：任何一步出错只影响它自己，不会让整页变空白
   const steps = [
     populateEngineSelect, renderGroups, renderTodos, updateEngineLabel,
-    applyBackground, applyVeil, applyTheme, highlightSwatch, applyComponents, showQuote,
+    applyBackground, applyVeil, applyTheme, highlightSwatch, applyComponents, applyFolds, showQuote,
     initWeatherPop, bindEvents,
   ];
   steps.forEach(fn => {

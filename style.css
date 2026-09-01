@@ -221,7 +221,7 @@ body {
 
 /* 底部三栏：待办 / 便签 / 环境音 横向并排，充分利用宽屏。
    卡片可跨区域拖拽，所以列数用 auto-fit 自适应，卡片数量变了也不会挤成一团。 */
-.extras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+.extras { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
 .card h3, .todo h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; opacity: .92; margin: 0 0 14px; }
 .add, .add-todo { margin-left: auto; cursor: pointer; opacity: .75; font-weight: 400; }
 .add:hover, .add-todo:hover { opacity: 1; }
@@ -432,3 +432,13 @@ textarea:focus-visible, a:focus-visible, .chip:focus-visible,
 .cd-days { font-size: 12.5px; opacity: .8; white-space: nowrap; }
 .cd-del { border: none; background: transparent; color: var(--danger); cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 6px; }
 .cd-del:hover { background: rgba(192,80,77,.18); }
+
+/* ---------- 20. 工具组件折叠（密度管理）+ 空状态 ---------- */
+.fold { margin-left: auto; cursor: pointer; opacity: .6; font-size: 12px; line-height: 1; transition: transform .2s, opacity .2s; user-select: none; }
+.fold:hover { opacity: 1; color: var(--warning); }
+.fold.folded { transform: rotate(-90deg); }
+.pomodoro.folded > .pomo-ring, .pomodoro.folded > .pomo-mode,
+.pomodoro.folded > .pomo-btns, .pomodoro.folded > .pomo-set,
+.calendar.folded > .cal-head, .calendar.folded > .cal-grid,
+.countdown.folded > .cd-add-row, .countdown.folded > #cd-list { display: none; }
+.empty-hint { display: block; width: 100%; padding: 8px 2px; }
