@@ -42,8 +42,16 @@ html { min-height: 100%; }
   --text-shadow: 0 1px 8px rgba(0,0,0,.45);
   --mask: rgba(0,0,0,.5);
   --veil-bg: linear-gradient(180deg, rgba(0,0,0,.42), rgba(0,0,0,.18) 30%, rgba(0,0,0,.42));
-  --page-bg: linear-gradient(150deg, #0a1020, #11183a 50%, #07131f);
+  --page-bg: linear-gradient(150deg, #1a1916, #23211c 50%, #13110d);  /* 墨色暖调，去 AI 冷蓝 */
   --option-fg: #000;   /* 下拉列表项的文字色：浏览器不继承页面色，必须单独给 */
+
+  /* 语义色令牌（中国风·传统色）：深色调偏青瓷 / 竹青 / 胭脂 / 赭石 */
+  --accent: #57a99c;            /* 青瓷青：点睛强调（替代通用 AI 蓝） */
+  --accent-soft: rgba(87,169,156,.38);
+  --success: #73a471;           /* 竹青绿：待办完成 */
+  --danger: #c0504d;            /* 胭脂红：删除 / 危险 */
+  --warning: #c8913c;           /* 赭石黄：编辑悬停 */
+  --font-serif: "Songti SC", "STSong", "SimSun", "Noto Serif SC", "Source Han Serif SC", serif;
 }
 
 /* 浅色主题：浅玻璃 + 深色字，蒙版改成白色提亮（否则照片太暗） */
@@ -74,8 +82,15 @@ body[data-theme="light"] {
   --text-shadow: none;   /* 亮底上不加投影，字更干净 */
   --mask: rgba(255,255,255,.35);
   --veil-bg: linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,.38) 30%, rgba(255,255,255,.62));
-  --page-bg: linear-gradient(150deg, #dfe7f3, #eef2f8 50%, #e2eaf4);
+  --page-bg: linear-gradient(150deg, #e9e0cc, #f3ecdc 50%, #e4d9c2);  /* 宣纸暖调，去 AI 冷蓝 */
   --option-fg: #16202e;
+
+  /* 浅色调下语义色加深以保证对比度 */
+  --accent: #3f7a72;
+  --accent-soft: rgba(63,122,114,.32);
+  --success: #5c7e47;
+  --danger: #a23b36;
+  --warning: #a9762a;
 }
 
 /* ---------- 1. 页面背景：由 JS 设为照片；这里给兜底渐变 ---------- */
@@ -110,8 +125,8 @@ body {
 .glass {
   position: relative;
   background: var(--glass-bg);
-  backdrop-filter: blur(22px) saturate(150%);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(116%);
+  -webkit-backdrop-filter: blur(20px) saturate(116%);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
   box-shadow: var(--glass-shadow);
@@ -132,7 +147,7 @@ body {
 
 /* ---------- 3. 顶部栏 ---------- */
 .topbar { display: flex; align-items: center; gap: 20px; padding: 16px 24px; margin-bottom: 26px; }
-.clock .time { font-size: 34px; font-weight: 300; letter-spacing: 1px; line-height: 1; }
+.clock .time { font-family: var(--font-serif); font-size: 36px; font-weight: 300; letter-spacing: 2px; line-height: 1; }
 .clock .date { font-size: 13px; opacity: .9; margin-top: 8px; }
 .weather { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .weather .ico { font-size: 28px; }
@@ -158,7 +173,7 @@ body {
   position: absolute; top: calc(100% + 10px); left: 18px;
   display: none; flex-direction: column; min-width: 132px; padding: 6px;
   background: var(--glass-bg);
-  backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%);
   border: 1px solid var(--glass-border); border-radius: 16px;
   box-shadow: var(--menu-shadow);
   z-index: 40;
@@ -169,7 +184,7 @@ body {
 .engine-menu div.on { background: var(--fill-on); font-weight: 600; }
 
 /* ---------- 5. 每日一句 ---------- */
-.quote { text-align: center; font-style: italic; opacity: .92; font-size: 14px; margin: 4px 0 20px; }
+.quote { text-align: center; font-style: normal; font-family: var(--font-serif); opacity: .92; font-size: 15px; margin: 4px 0 20px; letter-spacing: .5px; }
 
 /* ---------- 6. 壁纸风格切换器（缩略图由 JS 填充） ---------- */
 .styles { display: flex; align-items: center; gap: 12px; padding: 12px 18px; margin-bottom: 22px; }
@@ -179,13 +194,13 @@ body {
   border: 1px solid var(--glass-border); cursor: pointer;
   background-size: cover; background-position: center;
 }
-.swatch.on { box-shadow: 0 0 0 2px var(--ring), 0 0 12px rgba(120,160,255,.5); }
+.swatch.on { box-shadow: 0 0 0 2px var(--accent), 0 0 12px var(--accent-soft); }
 /* 必应每日壁纸：缩略图取到之前用蓝色块占位，字母 B 作为标识 */
 .swatch[data-style="bing"] {
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; color: #fff;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  text-shadow: 0 1px 3px rgba(0,0,0,.5);
+  font-size: 13px; font-weight: 700; color: #f3ece0;
+  background: linear-gradient(135deg, #3f7a72, #6e9b8e);  /* 青瓷渐变，去 AI 蓝 */
+  text-shadow: 0 1px 3px rgba(0,0,0,.45);
 }
 .custom-btn {
   margin-left: auto; padding: 8px 12px; border-radius: 12px;
@@ -222,7 +237,7 @@ body {
 .chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--dot); }
 .chip:hover { background: var(--fill-hover); }
 .chip .x { margin-left: 2px; opacity: .55; font-size: 12px; }
-.chip .x:hover { opacity: 1; color: #ff8a8a; }
+.chip .x:hover { opacity: 1; color: var(--danger); }
 
 /* ---------- 8. 待办 ---------- */
 .todo-add { display: flex; gap: 10px; margin-bottom: 12px; }
@@ -233,11 +248,11 @@ body {
 .item { display: flex; align-items: center; gap: 11px; padding: 10px 0; font-size: 14px; border-bottom: 1px solid var(--line); }
 .item:last-child { border-bottom: none; }
 .box { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--dot); cursor: pointer; flex: none; }
-.box.on { background: #34d399; border-color: #34d399; }
+.box.on { background: var(--success); border-color: var(--success); }
 .item .text { flex: 1; cursor: pointer; }
 .done { opacity: .6; text-decoration: line-through; }
 .item .del { opacity: .5; cursor: pointer; }
-.item .del:hover { opacity: 1; color: #ff8a8a; }
+.item .del:hover { opacity: 1; color: var(--danger); }
 
 /* ---------- 9. 拖拽视觉 ---------- */
 .draggable { cursor: grab; }
@@ -252,7 +267,7 @@ body {
 .grp-name { text-transform: uppercase; letter-spacing: 1.2px; }
 .grp-tools { margin-left: auto; display: flex; gap: 9px; opacity: .7; font-weight: 400; }
 .grp-tools span { cursor: pointer; }
-.grp-tools span:hover { opacity: 1; color: #ffd479; }
+.grp-tools span:hover { opacity: 1; color: var(--warning); }
 .chip .fav { width: 16px; height: 16px; border-radius: 4px; margin-right: 4px; object-fit: cover; background: var(--fill-soft); }
 .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dot); margin-right: 5px; }
 .chip[draggable="true"] { cursor: grab; }
@@ -266,6 +281,13 @@ body {
 
 /* 组件显隐 */
 .hidden { display: none !important; }
+
+/* ---------- 12.1 焦点可见性（无障碍 / WCAG AA）：键盘 Tab 时显示强调色描边 ---------- */
+input:focus-visible, button:focus-visible, select:focus-visible,
+textarea:focus-visible, a:focus-visible, .chip:focus-visible,
+.swatch:focus-visible, [draggable]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
 
 /* ---------- 12. 设置中心弹窗 ---------- */
 .modal-mask {
@@ -294,8 +316,8 @@ body {
 }
 .data-btns button:hover { background: var(--fill-hover); }
 /* 恢复默认：用一点红边提示这是有风险的操作 */
-.data-btns #set-reset { border-color: rgba(255,150,150,.55); }
-.data-btns #set-reset:hover { background: rgba(255,120,120,.28); }
+.data-btns #set-reset { border-color: rgba(192,80,77,.55); }
+.data-btns #set-reset:hover { background: rgba(192,80,77,.24); }
 
 /* ---------- 13. 响应式（按屏宽逐级收窄列数） ---------- */
 /* 中等屏：底部三栏变两栏 */
@@ -347,12 +369,12 @@ body {
 .amb-row select { flex: 1; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--stroke); background: var(--fill); color: var(--text); font-size: 14px; }
 .amb-row select option { color: var(--option-fg); }
 .amb-row button { padding: 9px 16px; border-radius: 10px; border: 1px solid var(--glass-border); background: var(--fill-strong); color: var(--text); cursor: pointer; font-size: 14px; }
-.amb-row button.on { background: rgba(120,200,140,.4); border-color: rgba(120,200,140,.7); }
-.ambient input[type=range] { width: 100%; accent-color: #8fd3a0; }
+.amb-row button.on { background: rgba(115,164,113,.34); border-color: rgba(115,164,113,.7); }
+.ambient input[type=range] { width: 100%; accent-color: var(--success); }
 
 /* ---------- 18. 书签数字快捷跳转角标（C2） ---------- */
 .chip { position: relative; }
-.chip .hot { position: absolute; top: -7px; left: -7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent, #6db0ff); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); pointer-events: none; }
+.chip .hot { position: absolute; top: -7px; left: -7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); pointer-events: none; }
 
 /* ---------- 16. 快捷键帮助弹窗 ---------- */
 .kbd-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
@@ -365,8 +387,8 @@ body {
 .engine-list .tip { margin: 0; }
 .eng-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border-radius: 10px; background: var(--fill); border: 1px solid var(--stroke); font-size: 14px; }
 .eng-item .eng-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.eng-item .eng-del { border: none; background: transparent; color: #ff8a8a; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 7px; }
-.eng-item .eng-del:hover { background: rgba(255,120,120,.18); }
+.eng-item .eng-del { border: none; background: transparent; color: var(--danger); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 7px; }
+.eng-item .eng-del:hover { background: rgba(192,80,77,.18); }
 .engine-add { display: flex; flex-wrap: wrap; gap: 8px; }
 .engine-add input { flex: 1 1 180px; min-width: 0; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--stroke); background: var(--fill); color: var(--text); font-size: 14px; outline: none; }
 .engine-add input::placeholder { color: var(--text-faint); }
@@ -380,7 +402,7 @@ body {
 .pomo-ring { position: relative; width: 130px; height: 130px; margin: 6px auto 4px; }
 .pomo-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .pomo-ring .ring-bg { fill: none; stroke: var(--stroke); stroke-width: 9; }
-.pomo-ring .ring-fg { fill: none; stroke: #6db0ff; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset .4s linear; }
+.pomo-ring .ring-fg { fill: none; stroke: var(--accent); stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset .4s linear; }
 .pomo-time { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pomo-mode { font-size: 13px; opacity: .75; margin-bottom: 8px; }
 .pomo-btns { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; }
@@ -392,12 +414,12 @@ body {
 /* 日历 */
 .calendar h3 { display: flex; align-items: center; justify-content: space-between; }
 .cal-nav button { border: none; background: var(--fill-strong); color: var(--text); width: 26px; height: 26px; border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1; }
-.cal-head { text-align: center; font-size: 14px; font-weight: 600; margin-bottom: 8px; opacity: .92; }
+.cal-head { text-align: center; font-family: var(--font-serif); font-size: 15px; font-weight: 600; margin-bottom: 8px; opacity: .92; letter-spacing: 1px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .cal-w { text-align: center; font-size: 11px; opacity: .55; padding: 2px 0; }
 .cal-cell { text-align: center; font-size: 13px; padding: 6px 0; border-radius: 8px; }
 .cal-cell.empty { visibility: hidden; }
-.cal-cell.today { background: #6db0ff; color: #fff; font-weight: 700; }
+.cal-cell.today { background: var(--accent); color: #fff; font-weight: 700; }
 
 /* 倒计时 */
 .countdown h3 { display: flex; align-items: center; justify-content: space-between; }
@@ -408,5 +430,5 @@ body {
 .cd-item:last-child { border-bottom: none; }
 .cd-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cd-days { font-size: 12.5px; opacity: .8; white-space: nowrap; }
-.cd-del { border: none; background: transparent; color: #ff8a8a; cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 6px; }
-.cd-del:hover { background: rgba(255,120,120,.18); }
+.cd-del { border: none; background: transparent; color: var(--danger); cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 6px; }
+.cd-del:hover { background: rgba(192,80,77,.18); }

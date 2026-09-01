@@ -83,7 +83,7 @@ function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 let state = load();
 
 /* ---------- 1. 壁纸：真实照片（每类存几张，按记住的位置取，不随机） ---------- */
-const FALLBACK = 'linear-gradient(150deg, #0a1020, #11183a 50%, #07131f)';
+const FALLBACK = 'linear-gradient(150deg, #1a1916, #23211c 50%, #13110d)';  /* 墨色暖调，去 AI 冷蓝 */
 const WALLPAPERS = {
   nature: [
     'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1600&q=80&auto=format&fit=crop',
@@ -375,7 +375,7 @@ function cycleEngine(dir) {
 function toast(msg) {
   const t = document.createElement('div');
   t.textContent = msg;
-  t.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);padding:10px 18px;border-radius:14px;background:rgba(20,24,40,.85);color:#fff;backdrop-filter:blur(10px);z-index:99;font-size:15px;';
+  t.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);padding:10px 18px;border-radius:14px;background:rgba(28,26,23,.88);color:#f3ece0;backdrop-filter:blur(10px);z-index:99;font-size:15px;';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2200);
 }
