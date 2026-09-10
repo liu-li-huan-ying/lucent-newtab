@@ -3,6 +3,11 @@ mockup*.html
 
 # 本地项目元数据（WorkBuddy 内部）
 .workbuddy/
+overview.md
+
+# 本地截图核对用的临时预览壳
+.preview/
+_preview-*.html
 
 # 构建 / 分发产物（可由源码重新生成）
 homepage-extension.zip

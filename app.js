@@ -84,7 +84,11 @@ function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 let state = load();
 
 /* ---------- 1. 壁纸：真实照片（每类存几张，按记住的位置取，不随机） ---------- */
-const FALLBACK = 'linear-gradient(150deg, #1a1916, #23211c 50%, #13110d)';  /* 墨色暖调，去 AI 冷蓝 */
+/* 统一图标出口：id 与 index.html 里的 <symbol> 精灵一一对应。
+   全站不再出现 emoji 图标，保证线宽 / 圆角 / 颜色一致。 */
+function icon(id, cls) {
+  return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + id + '"></use></svg>';
+}
 const WALLPAPERS = {
   nature: [
     'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=1600&q=80&auto=format&fit=crop',
@@ -107,13 +111,11 @@ const WALLPAPERS = {
     'https://images.unsplash.com/photo-1534796638898-225fd21397d4?w=1600&q=80&auto=format&fit=crop',
   ],
 };
-// 把最终图片贴到页面上（第二层是兜底渐变，图挂了也不至于全黑）
+// 壁纸写进 CSS 变量，交给 .wall 层统一做降饱和 / 压亮度处理，
+// 让照片退为「氛围」而不是跟 UI 抢戏的「噪声」。
+// 兜底渐变在 style.css 的 --page-bg，图挂了也不会全黑。
 function paintBg(url) {
-  document.body.style.backgroundImage = 'url("' + url + '"), ' + FALLBACK;
-  document.body.style.backgroundSize = 'cover, cover';
-  document.body.style.backgroundPosition = 'center, center';
-  document.body.style.backgroundRepeat = 'no-repeat, no-repeat';
-  document.body.style.backgroundAttachment = 'fixed, fixed';
+  document.documentElement.style.setProperty('--wall-url', 'url("' + url + '")');
 }
 const WALL_LABEL = { nature: '自然', city: '城市', minimal: '极简', abstract: '抽象' };
 
@@ -224,16 +226,19 @@ function tick() {
 }
 
 /* ---------- 4. 天气（Open-Meteo，免费免密钥，需联网） ---------- */
+/* 值改存 symbol 名（见 index.html 的 i-w-*），由 weatherIconHtml 渲染成线性图标；
+   彩色 emoji 会破坏整体质感，也压不住主题色。 */
 const WMO = {
-  0:['☀️','晴'],1:['🌤️','大致晴朗'],2:['⛅','局部多云'],3:['☁️','阴'],
-  45:['🌫️','雾'],48:['🌫️','雾'],
-  51:['🌦️','小毛毛雨'],53:['🌦️','毛毛雨'],55:['🌧️','毛毛雨'],
-  61:['🌧️','小雨'],63:['🌧️','中雨'],65:['🌧️','大雨'],
-  71:['🌨️','小雪'],73:['🌨️','中雪'],75:['❄️','大雪'],
-  80:['🌦️','阵雨'],81:['🌧️','阵雨'],82:['⛈️','强阵雨'],
-  95:['⛈️','雷阵雨'],96:['⛈️','雷阵雨'],99:['⛈️','强雷暴'],
+  0:['sun','晴'],1:['cloud-sun','大致晴朗'],2:['cloud-sun','局部多云'],3:['cloud','阴'],
+  45:['fog','雾'],48:['fog','雾'],
+  51:['rain','小毛毛雨'],53:['rain','毛毛雨'],55:['rain','毛毛雨'],
+  61:['rain','小雨'],63:['rain','中雨'],65:['rain','大雨'],
+  71:['snow','小雪'],73:['snow','中雪'],75:['snow','大雪'],
+  80:['rain','阵雨'],81:['rain','阵雨'],82:['thunder','强阵雨'],
+  95:['thunder','雷阵雨'],96:['thunder','雷阵雨'],99:['thunder','强雷暴'],
 };
-function weatherInfo(code) { const a = WMO[code] || ['🌡️', '未知']; return { icon: a[0], text: a[1] }; }
+function weatherInfo(code) { const a = WMO[code] || ['thermo', '未知']; return { icon: a[0], text: a[1] }; }
+function weatherIconHtml(name) { return icon('i-w-' + name); }
 
 let lastAQI = null;   // 四期：缓存空气指数，弹窗里显示
 
@@ -287,7 +292,7 @@ async function loadWeather() {
     const c = fd.current_weather;
     document.getElementById('weather-temp').textContent = Math.round(c.temperature) + '°C';
     const info = weatherInfo(c.weathercode);
-    document.getElementById('weather-ico').textContent = info.icon;
+    document.getElementById('weather-ico').innerHTML = weatherIconHtml(info.icon);
     document.getElementById('weather-city').textContent = name + ' · ' + info.text;
     renderWeatherPop(name, fd.daily);
   } catch (e) { document.getElementById('weather-city').textContent = '天气获取失败（需联网）'; }
@@ -301,7 +306,7 @@ function renderWeatherPop(name, daily) {
   const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const hasData = !!(daily && daily.time && daily.time.length);
   let html = '<div class="wp-head"><span>' + escapeHtml(name || '天气') + '</span>' +
-    '<button id="wp-close" class="x-btn" aria-label="关闭天气详情">✕</button></div>' +
+    '<button id="wp-close" class="x-btn" aria-label="关闭天气详情">' + icon('i-close') + '</button></div>' +
     '<div class="wp-search"><input id="wp-city" placeholder="切换城市，如 上海" />' +
     '<button id="wp-go">查询</button></div>' +
     '<div class="wp-aqi" id="wp-aqi">' +
@@ -313,7 +318,7 @@ function renderWeatherPop(name, daily) {
       if (i === 0) return;   // 今天已在顶栏，这里从第 2 天起
       const dt = new Date(t); const info = weatherInfo(daily.weathercode[i]);
       html += '<div class="wp-day"><div class="wd">' + days[dt.getDay()] + '</div>' +
-        '<div class="wi">' + info.icon + '</div>' +
+        '<div class="wi">' + weatherIconHtml(info.icon) + '</div>' +
         '<div class="wt">' + Math.round(daily.temperature_2m_min[i]) + '°/' + Math.round(daily.temperature_2m_max[i]) + '°</div></div>';
     });
   } else {
@@ -375,8 +380,8 @@ function cycleEngine(dir) {
 }
 function toast(msg) {
   const t = document.createElement('div');
+  t.className = 'toast';
   t.textContent = msg;
-  t.style.cssText = 'position:fixed;left:50%;top:20px;transform:translateX(-50%);padding:10px 18px;border-radius:14px;background:rgba(28,26,23,.88);color:#f3ece0;backdrop-filter:blur(10px);z-index:99;font-size:15px;';
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2200);
 }
@@ -399,7 +404,7 @@ function makeChip(g, b, i) {
   img.onerror = () => { const d = document.createElement('span'); d.className = 'dot'; img.replaceWith(d); };
   a.appendChild(img);
   const name = document.createElement('span'); name.textContent = b.name; a.appendChild(name);
-  const x = document.createElement('span'); x.className = 'x'; x.title = '删除'; x.textContent = '✕';
+  const x = document.createElement('span'); x.className = 'x'; x.title = '删除'; x.innerHTML = icon('i-close', 'ic-sm');
   x.setAttribute('role', 'button'); x.setAttribute('tabindex', '0'); x.setAttribute('aria-label', '删除书签 ' + b.name); keyActivate(x);
   x.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); state.bookmarks[g].splice(i, 1); save(); renderGroups(); });
   a.appendChild(x);
@@ -413,13 +418,13 @@ function renderGroups() {
   cards.innerHTML = '';
   Object.keys(state.bookmarks).forEach(g => {
     const card = document.createElement('div');
-    card.className = 'glass card draggable'; card.dataset.id = g;
+    card.className = 'panel card draggable'; card.dataset.id = g;
     card.innerHTML =
       '<h3><span class="grp-name">' + escapeHtml(g) + '</span>' +
       '<span class="grp-tools">' +
-        '<span class="add" data-group="' + g + '" title="添加链接">＋</span>' +
-        '<span class="rename" data-group="' + g + '" title="改名">✎</span>' +
-        '<span class="del-group" data-group="' + g + '" title="删除分组">🗑</span>' +
+        '<span class="add" data-group="' + g + '" title="添加链接">' + icon('i-plus', 'ic-sm') + '</span>' +
+        '<span class="rename" data-group="' + g + '" title="改名">' + icon('i-pencil', 'ic-sm') + '</span>' +
+        '<span class="del-group" data-group="' + g + '" title="删除分组">' + icon('i-trash', 'ic-sm') + '</span>' +
       '</span></h3>' +
       '<div class="chips" data-group="' + g + '"></div>';
     cards.appendChild(card);
@@ -521,7 +526,7 @@ function renderTodos() {
     div.className = 'item';
     div.innerHTML = '<span class="box ' + (t.done ? 'on' : '') + '"></span>' +
       '<span class="text ' + (t.done ? 'done' : '') + '">' + escapeHtml(t.text) + '</span>' +
-      '<span class="del" role="button" tabindex="0" title="删除" aria-label="删除待办">✕</span>';
+      '<span class="del" role="button" tabindex="0" title="删除" aria-label="删除待办">' + icon('i-close', 'ic-sm') + '</span>';
     const toggle = () => { state.todos[i].done = !state.todos[i].done; save(); renderTodos(); };
     div.querySelector('.box').addEventListener('click', toggle);
     div.querySelector('.text').addEventListener('click', toggle);
@@ -669,7 +674,7 @@ function renderEngineManager() {
   keys.forEach(k => {
     const e = custom[k];
     const row = document.createElement('div'); row.className = 'eng-item';
-    row.innerHTML = '<span class="eng-name"></span><button class="eng-del" title="删除" aria-label="删除搜索引擎">✕</button>';
+    row.innerHTML = '<span class="eng-name"></span><button class="eng-del" title="删除" aria-label="删除搜索引擎">' + icon('i-close', 'ic-sm') + '</button>';
     row.querySelector('.eng-name').textContent = e.name + '（' + k + '）';
     row.querySelector('.eng-del').addEventListener('click', () => {
       delete state.engines[k];
@@ -878,11 +883,19 @@ function bindAmbient() {
   const vol = document.getElementById('amb-vol');
   if (state.ambient.type) sel.value = state.ambient.type;
   if (state.ambient.volume != null) vol.value = state.ambient.volume;
+  // 图标是 <use> 引用，要换 href 而不是写 textContent；文案在独立的 span 里
+  const setPlaying = on => {
+    playBtn.classList.toggle('on', on);
+    const label = document.getElementById('amb-play-text');
+    if (label) label.textContent = on ? '暂停' : '播放';
+    const use = playBtn.querySelector('use');
+    if (use) use.setAttribute('href', on ? '#i-pause' : '#i-play');
+  };
   playBtn.addEventListener('click', () => {
-    if (noiseNode) { stopNoise(); playBtn.textContent = '▶ 播放'; playBtn.classList.remove('on'); return; }
+    if (noiseNode) { stopNoise(); setPlaying(false); return; }
     const type = sel.value; if (!type) { alert('先选择一种声音'); return; }
     ensureAudio(); if (audioCtx.state === 'suspended') audioCtx.resume();
-    startNoise(type); playBtn.textContent = '⏸ 暂停'; playBtn.classList.add('on');
+    startNoise(type); setPlaying(true);
   });
   sel.addEventListener('change', () => { state.ambient.type = sel.value; save(); if (noiseNode) startNoise(sel.value); });
   vol.addEventListener('input', () => { state.ambient.volume = parseFloat(vol.value); save(); if (noiseGain) noiseGain.gain.value = parseFloat(vol.value); });
@@ -998,7 +1011,7 @@ function renderCountdown() {
     const diff = daysBetween(now, target);
     const row = document.createElement('div'); row.className = 'cd-item';
     const txt = diff === 0 ? '就是今天 🎉' : (diff > 0 ? '还有 ' + diff + ' 天' : '已过 ' + (-diff) + ' 天');
-    row.innerHTML = '<span class="cd-name"></span><span class="cd-days">' + txt + '</span><span class="cd-del" role="button" tabindex="0" title="删除" aria-label="删除倒计时">✕</span>';
+    row.innerHTML = '<span class="cd-name"></span><span class="cd-days">' + txt + '</span><span class="cd-del" role="button" tabindex="0" title="删除" aria-label="删除倒计时">' + icon('i-close', 'ic-sm') + '</span>';
     row.querySelector('.cd-name').textContent = ev.name + '（' + ev.date + '）';
     const cdDel = row.querySelector('.cd-del');
     cdDel.addEventListener('click', () => { state.events.splice(i, 1); save(); renderCountdown(); });
