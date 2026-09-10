@@ -111,11 +111,34 @@ const WALLPAPERS = {
     'https://images.unsplash.com/photo-1534796638898-225fd21397d4?w=1600&q=80&auto=format&fit=crop',
   ],
 };
-// 壁纸写进 CSS 变量，交给 .wall 层统一做降饱和 / 压亮度处理，
-// 让照片退为「氛围」而不是跟 UI 抢戏的「噪声」。
-// 兜底渐变在 style.css 的 --page-bg，图挂了也不会全黑。
+// 壁纸写进 .wall 层的 CSS 变量，由它统一做降饱和 / 压亮度处理，
+// 让照片退为「氛围」而不是跟 UI 抢戏的「噪声」。兜底渐变在 style.css 的 --page-bg，图挂了也不会全黑。
+//
+// 双层交叉溶解：#wall-a / #wall-b 交替点亮。换图时把新图写进「当前不可见」的那层，
+// 淡入后再让旧层退场 —— 取代过去的硬切。首帧直接落位，不播动画。
+let wallSlot = 0;         // 当前点亮的是哪层（0 → #wall-a，1 → #wall-b）
+let wallPainted = false;
 function paintBg(url) {
-  document.documentElement.style.setProperty('--wall-url', 'url("' + url + '")');
+  const a = document.getElementById('wall-a'), b = document.getElementById('wall-b');
+  const img = 'url("' + url + '")';
+  if (!wallPainted) {                       // 首帧：直接点亮 A 层
+    a.style.setProperty('--wall-url', img);
+    a.style.opacity = '1';
+    wallPainted = true;
+    return;
+  }
+  const incoming = wallSlot === 0 ? b : a;
+  const outgoing = wallSlot === 0 ? a : b;
+  incoming.style.setProperty('--wall-url', img);
+  incoming.style.transition = 'none';       // 先把新层归到起点（避免带出上一轮过渡）
+  incoming.style.opacity = '0';
+  incoming.style.transform = 'scale(1.03)';
+  void incoming.offsetHeight;               // 强制重排，让起点生效
+  incoming.style.transition = '';           // 交还给 CSS 的溶解过渡
+  incoming.style.opacity = '1';
+  incoming.style.transform = 'scale(1)';
+  setTimeout(() => { outgoing.style.opacity = '0'; }, 700);   // 新图盖住后再收旧层
+  wallSlot = 1 - wallSlot;
 }
 const WALL_LABEL = { nature: '自然', city: '城市', minimal: '极简', abstract: '抽象' };
 
@@ -422,7 +445,7 @@ function renderWeatherPop(name, daily) {
   }
   html += '</div>';
   pop.innerHTML = html;
-  document.getElementById('wp-close').addEventListener('click', () => pop.classList.remove('open'));
+  document.getElementById('wp-close').addEventListener('click', () => animateOut(pop));
   const auto = document.getElementById('wp-auto');
   if (auto) auto.addEventListener('click', useAutoLocation);
   const go = () => { const v = document.getElementById('wp-city').value.trim(); if (v) geocode(v); };
@@ -456,7 +479,15 @@ function engineUrl(key, q) {
   if (typeof e.url === 'function') return e.url(q);
   return e.url.replace(/\{q\}/g, encodeURIComponent(q));
 }
-function updateEngineLabel() { document.getElementById('engine-label').textContent = allEngines()[state.engine].name + ' ▾'; }
+// 更新当前引擎名，并让名字下的「墨痕」重画一次。
+// 首帧不闪（只画静态墨痕），只有真正切换引擎时才播那一下展开。
+let engineLabelReady = false;
+function updateEngineLabel() {
+  const el = document.getElementById('engine-label');
+  el.querySelector('.eng-txt').textContent = allEngines()[state.engine].name;
+  if (engineLabelReady) { el.classList.remove('mark'); void el.offsetWidth; el.classList.add('mark'); }
+  engineLabelReady = true;
+}
 function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
@@ -495,6 +526,18 @@ function toast(msg) {
      const ok = await confirmDialog({ title, desc, okText, danger });
    desc 走 innerHTML（便于加粗关键词），调用方自行转义插值。
 -------------------------------------------------------------- */
+/* 统一「柔和退场」：加 .closing 播退场动画，动画结束（或兜底 360ms）再摘掉 .open。
+   设置 / 快捷键 / 通用对话框 / 天气弹窗都走它 —— 弹层不再「啪一下消失」。 */
+function animateOut(el) {
+  if (!el || !el.classList.contains('open') || el.classList.contains('closing')) return;
+  el.classList.add('closing');
+  const done = () => { el.classList.remove('open', 'closing'); el.removeEventListener('animationend', done); };
+  el.addEventListener('animationend', done);
+  setTimeout(done, 360);      // 兜底：极端情况下 animationend 没触发也能收干净
+}
+/* 与 animateOut 配对：开之前先清掉残留的 .closing，保证「刚关又开」也能正常播入场动效 */
+function openFloat(el) { el.classList.remove('closing'); el.classList.add('open'); }
+
 function openDialog(opt) {
   const mask = document.getElementById('dialog-modal');
   const box = document.getElementById('dialog-box');
@@ -532,7 +575,7 @@ function openDialog(opt) {
   const onMaskDown = e => { if (e.target === mask) finish(null); };
 
   function finish(result) {
-    mask.classList.remove('open');
+    animateOut(mask);
     document.removeEventListener('keydown', onKey, true);
     mask.removeEventListener('mousedown', onMaskDown);
     if (prevFocus && prevFocus.focus) prevFocus.focus();   // 还原焦点，键盘用户不迷路
@@ -582,7 +625,7 @@ function openDialog(opt) {
   });
   mask.addEventListener('mousedown', onMaskDown);
   document.addEventListener('keydown', onKey, true);   // 捕获阶段：先于全局 Esc / 快捷键
-  mask.classList.add('open');
+  openFloat(mask);
 
   const auto = inputs.find(i => !i.value) || inputs[0];
   setTimeout(() => {
@@ -991,11 +1034,11 @@ function bindSettings() {
     document.getElementById('set-theme').value = state.theme === 'light' ? 'light' : 'dark';
     document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => { cb.checked = state.components[cb.dataset.comp]; });
     renderEngineManager();            // 打开时刷新自定义引擎列表
-    modal.classList.add('open');
+    openFloat(modal);
   };
   document.getElementById('btn-settings').addEventListener('click', open);
-  document.getElementById('set-close').addEventListener('click', () => modal.classList.remove('open'));
-  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+  document.getElementById('set-close').addEventListener('click', () => animateOut(modal));
+  modal.addEventListener('click', e => { if (e.target === modal) animateOut(modal); });
   // 引擎
   document.getElementById('set-engine').addEventListener('change', e => { state.engine = e.target.value; save(); updateEngineLabel(); });
   // 壁纸分类
@@ -1168,12 +1211,15 @@ function bindAmbient() {
 
 /* ---------- 14. 四期③：键盘快捷键 ---------- */
 function closeAll() {
-  document.getElementById('engine-menu').classList.remove('open');
-  document.getElementById('settings-modal').classList.remove('open');
-  document.getElementById('kbd-modal').classList.remove('open');
-  document.getElementById('weather-pop').classList.remove('open');
+  document.getElementById('engine-menu').classList.remove('open');   // 引擎菜单瞬时收起，不做退场动画
+  animateOut(document.getElementById('settings-modal'));
+  animateOut(document.getElementById('kbd-modal'));
+  animateOut(document.getElementById('weather-pop'));
 }
-function toggleKbd() { document.getElementById('kbd-modal').classList.toggle('open'); }
+function toggleKbd() {
+  const m = document.getElementById('kbd-modal');
+  if (m.classList.contains('open')) animateOut(m); else openFloat(m);
+}
 function bindKeys() {
   document.addEventListener('keydown', e => {
     const tag = (e.target.tagName || '').toLowerCase();
@@ -1353,12 +1399,14 @@ function bindEvents() {
 
   // 四期④：天气弹窗开关 + 点击外部关闭
   const wp = document.getElementById('weather-pop');
-  document.getElementById('comp-weather').addEventListener('click', () => wp.classList.toggle('open'));
+  document.getElementById('comp-weather').addEventListener('click', () => {
+    if (wp.classList.contains('open')) animateOut(wp); else openFloat(wp);
+  });
   document.addEventListener('click', e => {
-    if (wp.classList.contains('open') && !wp.contains(e.target) && !document.getElementById('comp-weather').contains(e.target)) wp.classList.remove('open');
+    if (wp.classList.contains('open') && !wp.contains(e.target) && !document.getElementById('comp-weather').contains(e.target)) animateOut(wp);
   });
   // 快捷键帮助弹窗关闭
-  document.getElementById('kbd-close').addEventListener('click', () => document.getElementById('kbd-modal').classList.remove('open'));
+  document.getElementById('kbd-close').addEventListener('click', () => animateOut(document.getElementById('kbd-modal')));
 }
 
 /* ---------- 16. 启动 ---------- */

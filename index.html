@@ -15,7 +15,9 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wall" aria-hidden="true"></div>
+  <!-- 壁纸双层：换图时新旧两层交叉溶解（JS 控制 opacity / transform），不再硬切 -->
+  <div class="wall" id="wall-a" aria-hidden="true"></div>
+  <div class="wall" id="wall-b" aria-hidden="true"></div>
   <div class="veil" aria-hidden="true"></div>
 
   <!-- ============ 图标精灵：统一 1.6px 线性图标（全站唯一图标来源，替代 emoji） ============ -->
@@ -73,7 +75,7 @@
 
     <!-- ---------- 搜索 ---------- -->
     <div class="glass search" id="comp-search">
-      <span class="engine" id="engine-label" role="button" tabindex="0" aria-label="选择搜索引擎" aria-haspopup="true" aria-expanded="false">必应 <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-down"/></svg></span>
+      <span class="engine" id="engine-label" role="button" tabindex="0" aria-label="选择搜索引擎" aria-haspopup="true" aria-expanded="false"><span class="eng-txt">必应</span> <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-down"/></svg></span>
       <div class="engine-menu" id="engine-menu"></div>
       <input id="search-input" placeholder="搜索，或输入算式如 1+1 …" autocomplete="off" aria-label="搜索" />
       <span class="go" id="search-go" role="button" tabindex="0" aria-label="搜索"><svg class="ic" aria-hidden="true"><use href="#i-arrow-right"/></svg></span>

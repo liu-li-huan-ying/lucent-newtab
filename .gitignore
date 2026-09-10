@@ -1,5 +1,6 @@
 # 设计草稿（非成品，仅过程稿）
 mockup*.html
+tmp-preview/
 
 # 本地项目元数据（WorkBuddy 内部）
 .workbuddy/
