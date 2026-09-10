@@ -41,6 +41,10 @@
     <symbol id="i-w-snow" viewBox="0 0 24 24"><path d="M16.4 15.2H8a3.9 3.9 0 0 1-.5-7.76 5.1 5.1 0 0 1 9.7 1.02 3.4 3.4 0 0 1-.8 6.74Z"/><path d="M8.4 19.6h.01M12 21h.01M15.6 19.6h.01"/></symbol>
     <symbol id="i-w-thunder" viewBox="0 0 24 24"><path d="M16.4 14.6H8a3.9 3.9 0 0 1-.5-7.76 5.1 5.1 0 0 1 9.7 1.02 3.4 3.4 0 0 1-.8 6.74Z"/><path d="m12.6 16.6-2.5 4.2h3.3l-1.6 3"/></symbol>
     <symbol id="i-w-thermo" viewBox="0 0 24 24"><path d="M14.2 14.6V5.4a2.2 2.2 0 1 0-4.4 0v9.2a4.2 4.2 0 1 0 4.4 0Z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M9.6 14.4a4.2 4.2 0 0 0 6 0l2.9-2.9a4.2 4.2 0 1 0-6-6L11.2 6.8"/><path d="M14.4 9.6a4.2 4.2 0 0 0-6 0l-2.9 2.9a4.2 4.2 0 1 0 6 6l1.3-1.3"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="8.6" cy="10" r="1.7"/><path d="m3.6 17.2 4.9-4.9 3.6 3.6 3.1-3.1 5.2 5.2"/></symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.4"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.4v3.2M12 18.4v3.2M2.4 12h3.2M18.4 12h3.2"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.6 21 19.4H3z"/><path d="M12 9.6v4.6M12 16.9h.01"/></symbol>
   </svg>
 
   <!-- ============ 右上角操作（浮动，不占主视觉流） ============ -->
@@ -235,6 +239,11 @@
         <div class="kbd-row"><span class="key">Esc</span><span>关闭所有弹窗</span></div>
       </div>
     </div>
+  </div>
+
+  <!-- 通用对话框容器（添加链接 / 改名 / 删除确认 / 自定义壁纸等，内容由 JS 渲染） -->
+  <div class="modal-mask" id="dialog-modal">
+    <div class="glass modal dialog" id="dialog-box" role="dialog" aria-modal="true" aria-labelledby="dialog-title"></div>
   </div>
 
   <script src="app.js"></script>

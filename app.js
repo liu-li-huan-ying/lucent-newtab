@@ -242,24 +242,122 @@ function weatherIconHtml(name) { return icon('i-w-' + name); }
 
 let lastAQI = null;   // 四期：缓存空气指数，弹窗里显示
 
-// 四期：城市名 → 经纬度（Open-Meteo 免费地理编码）
-async function geocode(name) {
-  const url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(name) + '&count=1&language=zh&format=json';
+/* ---------- IP 定位 ----------
+   navigator.geolocation 会弹权限框，在扩展页 / 本地文件里还经常直接失败，
+   所以改成按出口 IP 定位：不用授权，打开新标签页就是本地天气。
+   多家免费服务依次尝试——任何一家抽风或不可达都自动换下一家。
+   有的服务只给城市名（没有经纬度），这时交给地理编码补坐标。 */
+const IP_GEO_PROVIDERS = [
+  { url: 'https://ipwho.is/',
+    pick: d => d && d.success !== false && d.latitude != null && { name: d.city || d.region, lat: d.latitude, lon: d.longitude } },
+  { url: 'https://ipapi.co/json/',
+    pick: d => d && d.latitude != null && { name: d.city || d.region, lat: d.latitude, lon: d.longitude } },
+  { url: 'https://api.ip.sb/geoip',
+    pick: d => d && d.latitude != null && { name: d.city || d.region, lat: d.latitude, lon: d.longitude } },
+  { url: 'https://ip.useragentinfo.com/json',
+    pick: d => d && (d.city || d.province) && { name: d.city || d.province } },   // 只给城市名，坐标另查
+];
+
+// 带超时的 JSON 请求：某个服务无响应时直接放弃，不让天气一直转圈
+async function fetchJSON(url, ms) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms || 6000);
   try {
-    const r = await fetch(url); const d = await r.json();
+    const r = await fetch(url, { signal: ctl.signal, cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(timer); }
+}
+
+async function geoFromIP() {
+  for (const p of IP_GEO_PROVIDERS) {
+    try {
+      const loc = p.pick(await fetchJSON(p.url, 4500));   // 单家最多等 4.5s
+      if (!loc || !loc.name) continue;
+      // IP 库给的城市名多是英文（Anyang），过一遍地理编码换成中文（安阳）。
+      // 坐标仍以 IP 库为准——那是「设备实际在哪」，地理编码只是拿名字。
+      const zh = await lookupCity(loc.name);
+      if (loc.lat != null) return { name: zh ? zh.name : loc.name, lat: loc.lat, lon: loc.lon };
+      if (zh) return zh;                                    // 只拿到城市名的那种，只能用地理编码的坐标
+      continue;
+    } catch (e) { /* 静默换下一家 */ }
+  }
+  return null;
+}
+
+//「安阳市」→「安阳」：天气标签上挂行政后缀显得笨重（只在保留 ≥2 字时才裁）
+function shortCity(n) {
+  const s = String(n || '').trim();
+  return s.length > 2 && /[市省]$/.test(s) ? s.slice(0, -1) : s;
+}
+
+// 城市名 → 经纬度（Open-Meteo 免费地理编码）；查不到返回 null，由调用方决定怎么表达
+async function lookupCity(name) {
+  try {
+    const url = 'https://geocoding-api.open-meteo.com/v1/search?name=' +
+      encodeURIComponent(name) + '&count=1&language=zh&format=json';
+    const d = await fetchJSON(url, 6000);
     if (d.results && d.results.length) {
-      const res = d.results[0];
-      state.weather = { name: res.name, lat: res.latitude, lon: res.longitude }; save();
-      loadWeather();
-    } else alert('未找到该城市，换个写法试试');
-  } catch (e) { alert('城市查询失败（需联网）'); }
+      const c = d.results[0];
+      return { name: shortCity(c.name), lat: c.latitude, lon: c.longitude };
+    }
+  } catch (e) {}
+  return null;
+}
+
+// 弹窗里的状态提示行（查询中 / 查不到 / 已切换），默认空着不占视觉
+function setWeatherStatus(msg, kind) {
+  const el = document.getElementById('wp-city-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('bad', kind === 'bad');
+}
+
+// 天气弹窗里的城市搜索：结果就地反馈，不再用 alert 打断整页
+async function geocode(name) {
+  const go = document.getElementById('wp-go');
+  setWeatherStatus('查询中…');
+  if (go) go.disabled = true;
+  const c = await lookupCity(name);
+  if (go) go.disabled = false;
+  if (!c) { setWeatherStatus('没找到「' + name + '」，换个写法试试', 'bad'); return; }
+  state.weather = { name: c.name, lat: c.lat, lon: c.lon, manual: true };
+  save();
+  await loadWeather();            // 先重画（会清空状态行），再把结果写回去
+  setWeatherStatus('已切换到 ' + c.name + '（不再跟随网络位置）');
+}
+
+// 改回自动定位：抹掉手选标记和缓存，下次重新按出口 IP 定位
+function useAutoLocation() {
+  if (state.weather) { delete state.weather.manual; delete state.weather.geoAt; }
+  setWeatherStatus('正在按网络位置重新定位…');
+  loadWeather().then(() => setWeatherStatus('已改回自动定位'));
+}
+
+/* 当前定位：用户手选的城市永远优先；否则按 IP 定位，结果缓存 12 小时
+   （IP 不常变，没必要每开一个新标签就请求一次）。 */
+const GEO_TTL = 12 * 3600 * 1000;
+const GEO_FAIL_TTL = 10 * 60 * 1000;   // 定位失败只记 10 分钟，网一恢复就能自己改回来
+const GEO_V = 2;      // 定位管线版本：升一版就让旧缓存失效（v1 的缓存里存的是英文城市名）
+async function resolveLocation() {
+  const w = state.weather;
+  if (w && w.manual && w.lat) return w;                            // 手选优先，永不被覆盖
+  // 缓存未过期（且是当前管线版本）才复用；上次失败的话只等很短一会儿
+  if (w && w.lat && w.geoV === GEO_V && w.geoAt &&
+      Date.now() - w.geoAt < (w.fallback ? GEO_FAIL_TTL : GEO_TTL)) return w;
+  const loc = await geoFromIP();
+  state.weather = loc
+    ? { name: loc.name, lat: loc.lat, lon: loc.lon, manual: false, geoAt: Date.now(), geoV: GEO_V }
+    : { name: '北京', lat: 39.9042, lon: 116.4074, manual: false, geoAt: Date.now(), geoV: GEO_V, fallback: true };
+  save();
+  return state.weather;
 }
 
 // 四期：空气指数（Open-Meteo 空气质控，免费免密钥）
 async function loadAQI(lat, lon) {
   try {
     const url = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=' + lat + '&longitude=' + lon + '&current=european_aqi';
-    const r = await fetch(url); const d = await r.json();
+    const d = await fetchJSON(url, 8000);
     lastAQI = d.current.european_aqi;
     const el = document.getElementById('wp-aqi');
     if (el) el.textContent = '空气指数 AQI：' + lastAQI;
@@ -269,33 +367,24 @@ async function loadAQI(lat, lon) {
   }
 }
 
-// 主天气加载：优先用记住的城市；首次且允许定位时尝试定位
+// 主天气加载：先定位置（手选 > IP > 北京），再取当前天气 + 未来几天
 async function loadWeather() {
-  let lat, lon, name;
-  if (state.weather && state.weather.lat) {
-    lat = state.weather.lat; lon = state.weather.lon; name = state.weather.name;
-  } else {
-    try {
-      const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
-      lat = pos.coords.latitude; lon = pos.coords.longitude; name = '我的位置';
-      state.weather = { name, lat, lon }; save();
-    } catch (e) {
-      lat = 39.9042; lon = 116.4074; name = '北京';
-      state.weather = { name, lat, lon }; save();
-    }
-  }
+  const loc = await resolveLocation();
+  const lat = loc.lat, lon = loc.lon, name = loc.name;
+  const cityEl = document.getElementById('weather-city');
   // 当前天气 + 未来几天（daily）
   const furl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
     '&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto';
   try {
-    const fr = await fetch(furl); const fd = await fr.json();
+    const fd = await fetchJSON(furl, 8000);
     const c = fd.current_weather;
     document.getElementById('weather-temp').textContent = Math.round(c.temperature) + '°C';
     const info = weatherInfo(c.weathercode);
     document.getElementById('weather-ico').innerHTML = weatherIconHtml(info.icon);
-    document.getElementById('weather-city').textContent = name + ' · ' + info.text;
+    // 「定位失败」必须留下来，否则用户只看到「北京」，无从知道这不是他的位置
+    cityEl.textContent = (loc.fallback ? '定位失败 · ' : '') + name + ' · ' + info.text;
     renderWeatherPop(name, fd.daily);
-  } catch (e) { document.getElementById('weather-city').textContent = '天气获取失败（需联网）'; }
+  } catch (e) { cityEl.textContent = '天气获取失败（需联网）'; }
   loadAQI(lat, lon);
 }
 
@@ -305,10 +394,17 @@ function renderWeatherPop(name, daily) {
   if (!pop) return;
   const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const hasData = !!(daily && daily.time && daily.time.length);
+  // 手选过城市才给「自动定位」出口，否则用户一旦切错就回不去了
+  const manual = !!(state.weather && state.weather.manual);
   let html = '<div class="wp-head"><span>' + escapeHtml(name || '天气') + '</span>' +
-    '<button id="wp-close" class="x-btn" aria-label="关闭天气详情">' + icon('i-close') + '</button></div>' +
-    '<div class="wp-search"><input id="wp-city" placeholder="切换城市，如 上海" />' +
+    '<span class="wp-tools">' +
+      (manual ? '<button id="wp-auto" class="wp-auto" title="改回按网络位置自动定位">' +
+        icon('i-locate', 'ic-sm') + '自动定位</button>' : '') +
+      '<button id="wp-close" class="x-btn" aria-label="关闭天气详情">' + icon('i-close') + '</button>' +
+    '</span></div>' +
+    '<div class="wp-search"><input id="wp-city" aria-label="切换城市" placeholder="切换城市，如 上海" />' +
     '<button id="wp-go">查询</button></div>' +
+    '<div class="wp-status" id="wp-city-status"></div>' +
     '<div class="wp-aqi" id="wp-aqi">' +
       (lastAQI != null ? '空气指数 AQI：' + lastAQI : (hasData ? '空气指数 加载中…' : '天气暂不可用（需联网）')) +
     '</div>' +
@@ -327,6 +423,8 @@ function renderWeatherPop(name, daily) {
   html += '</div>';
   pop.innerHTML = html;
   document.getElementById('wp-close').addEventListener('click', () => pop.classList.remove('open'));
+  const auto = document.getElementById('wp-auto');
+  if (auto) auto.addEventListener('click', useAutoLocation);
   const go = () => { const v = document.getElementById('wp-city').value.trim(); if (v) geocode(v); };
   document.getElementById('wp-go').addEventListener('click', go);
   document.getElementById('wp-city').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
@@ -384,6 +482,119 @@ function toast(msg) {
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------- 通用对话框：替代 prompt / confirm ----------
+   原生弹窗被浏览器钉在窗口顶部、样式完全不可控，和整页质感割裂，
+   而且一次只能问一个问题（加链接要弹两次）。这里统一走居中的玻璃面板：
+   字段是结构化表单，必填项原地报错，危险操作用红色主按钮。
+
+   用法：
+     const v = await openDialog({ title, desc, icon, fields:[...], okText, danger });
+       v 为 { 字段名: 值 }，取消则为 null
+     const ok = await confirmDialog({ title, desc, okText, danger });
+   desc 走 innerHTML（便于加粗关键词），调用方自行转义插值。
+-------------------------------------------------------------- */
+function openDialog(opt) {
+  const mask = document.getElementById('dialog-modal');
+  const box = document.getElementById('dialog-box');
+  const fields = opt.fields || [];
+  const danger = !!opt.danger;
+  const prevFocus = document.activeElement;
+
+  box.className = 'glass modal dialog' + (danger ? ' is-danger' : '');
+  box.innerHTML =
+    '<div class="dlg-head">' +
+      icon(danger ? 'i-alert' : (opt.icon || 'i-link')) +
+      '<h2 id="dialog-title">' + escapeHtml(opt.title || '') + '</h2>' +
+      '<button class="x-btn" data-act="cancel" aria-label="关闭">' + icon('i-close') + '</button>' +
+    '</div>' +
+    (opt.desc ? '<p class="dlg-desc">' + opt.desc + '</p>' : '') +
+    (fields.length
+      ? '<div class="dlg-fields">' + fields.map(f =>
+          '<label class="dlg-field" data-key="' + f.key + '">' +
+            '<span>' + escapeHtml(f.label) + '</span>' +
+            '<input type="' + (f.type || 'text') + '" data-key="' + f.key + '" ' +
+              'value="' + escapeHtml(f.value || '') + '" ' +
+              'placeholder="' + escapeHtml(f.placeholder || '') + '" ' +
+              'autocomplete="off" spellcheck="false" />' +
+            '<em class="dlg-err"></em>' +
+          '</label>').join('') + '</div>'
+      : '') +
+    '<div class="dlg-foot">' +
+      (opt.footLeft || '') +
+      '<button data-act="cancel">取消</button>' +
+      '<button class="' + (danger ? 'btn-danger' : 'btn-primary') + '" data-act="ok">' +
+        escapeHtml(opt.okText || '确定') + '</button>' +
+    '</div>';
+
+  const inputs = [...box.querySelectorAll('input[data-key]')];
+  const onMaskDown = e => { if (e.target === mask) finish(null); };
+
+  function finish(result) {
+    mask.classList.remove('open');
+    document.removeEventListener('keydown', onKey, true);
+    mask.removeEventListener('mousedown', onMaskDown);
+    if (prevFocus && prevFocus.focus) prevFocus.focus();   // 还原焦点，键盘用户不迷路
+    resolve(result);
+  }
+
+  // 校验：必填为空或自定义规则不过，就地标红并把焦点送过去
+  function submit() {
+    const vals = {};
+    inputs.forEach(i => { vals[i.dataset.key] = i.value.trim(); });
+    let firstBad = null;
+    fields.forEach(f => {
+      const wrap = box.querySelector('.dlg-field[data-key="' + f.key + '"]');
+      let msg = '';
+      if (f.required && !vals[f.key]) msg = '这一项不能为空';
+      else if (f.validate) msg = f.validate(vals[f.key], vals) || '';
+      wrap.classList.toggle('bad', !!msg);
+      wrap.querySelector('.dlg-err').textContent = msg;
+      if (msg && !firstBad) firstBad = wrap.querySelector('input');
+    });
+    if (firstBad) { firstBad.focus(); return; }
+    finish(vals);
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); return; }
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); submit(); return; }
+    if (e.key === 'Tab') {                    // 焦点锁在面板内，不跑到背后的页面上
+      const f = [...box.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])')];
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+
+  let resolve;
+  const p = new Promise(res => { resolve = res; });
+
+  box.querySelectorAll('[data-act]').forEach(b => {
+    b.addEventListener('click', () => {
+      const act = b.dataset.act;
+      if (act === 'ok') submit();
+      else if (act === 'cancel') finish(null);
+      else if (opt.onAction) opt.onAction(act, finish);   // 自定义动作，由调用方决定关不关
+    });
+  });
+  mask.addEventListener('mousedown', onMaskDown);
+  document.addEventListener('keydown', onKey, true);   // 捕获阶段：先于全局 Esc / 快捷键
+  mask.classList.add('open');
+
+  const auto = inputs.find(i => !i.value) || inputs[0];
+  setTimeout(() => {
+    if (auto) { auto.focus(); if (auto.select) auto.select(); }
+    else box.querySelector('[data-act="ok"]').focus();
+  }, 30);
+  return p;
+}
+
+function confirmDialog(opt) {
+  return openDialog(Object.assign({ icon: 'i-alert', okText: '确定' }, opt))
+    .then(v => v !== null);
 }
 
 /* ---------- 6. 网站导航：动态分组 + favicon + 拖拽 ---------- */
@@ -490,29 +701,56 @@ function bindGroupActions() {
     const g = e.target.dataset.group;
     if (!g) return;
     if (e.target.classList.contains('add')) {                 // 加链接
-      const name = prompt('网站名称：'); if (!name) return;
-      let url = prompt('网址（含 http(s)://）：'); if (!url) return;
-      if (!/^https?:\/\//.test(url)) url = 'https://' + url;
-      state.bookmarks[g].push({ name, url }); save(); renderGroups();
+      openDialog({
+        title: '添加链接', icon: 'i-link',
+        fields: [
+          { key: 'name', label: '名称', placeholder: '如 GitHub', required: true },
+          { key: 'url', label: '网址', placeholder: 'https://github.com', required: true,
+            validate: v => /\s/.test(v) ? '网址里不能有空格' : '' },
+        ],
+        okText: '添加',
+      }).then(v => {
+        if (!v) return;
+        const url = /^https?:\/\//i.test(v.url) ? v.url : 'https://' + v.url;
+        state.bookmarks[g].push({ name: v.name, url }); save(); renderGroups();
+      });
     } else if (e.target.classList.contains('rename')) {       // 改名
-      const n = prompt('分组新名称：', g); if (!n) return;
-      if (n !== g && !state.bookmarks[n]) {
-        state.bookmarks[n] = state.bookmarks[g]; delete state.bookmarks[g];
-        state.cardOrder = state.cardOrder.map(id => id === g ? n : id);
+      openDialog({
+        title: '重命名分组', icon: 'i-pencil',
+        fields: [{ key: 'name', label: '分组名称', value: g, required: true,
+          validate: v => (v !== g && state.bookmarks[v]) ? '已经有同名分组了' : '' }],
+        okText: '保存',
+      }).then(v => {
+        if (!v || v.name === g) return;
+        state.bookmarks[v.name] = state.bookmarks[g]; delete state.bookmarks[g];
+        state.cardOrder = state.cardOrder.map(id => id === g ? v.name : id);
         save(); renderGroups();
-      }
+      });
     } else if (e.target.classList.contains('del-group')) {    // 删除分组
-      if (confirm('删除分组“' + g + '”及其所有链接？')) {
+      confirmDialog({
+        title: '删除分组',
+        desc: '将删除 <strong>' + escapeHtml(g) + '</strong> 及其中的 ' +
+              state.bookmarks[g].length + ' 个链接，无法撤销。',
+        okText: '删除', danger: true,
+      }).then(ok => {
+        if (!ok) return;
         delete state.bookmarks[g];
         state.cardOrder = state.cardOrder.filter(id => id !== g);
         save(); renderGroups();
-      }
+      });
     }
   });
   // 新增分组
   document.getElementById('btn-add-group').addEventListener('click', () => {
-    const n = prompt('新分组名称：'); if (!n) return;
-    if (!state.bookmarks[n]) { state.bookmarks[n] = []; state.cardOrder.push(n); save(); renderGroups(); }
+    openDialog({
+      title: '新建分组', icon: 'i-plus',
+      fields: [{ key: 'name', label: '分组名称', placeholder: '如 工作', required: true,
+        validate: v => state.bookmarks[v] ? '已经有同名分组了' : '' }],
+      okText: '创建',
+    }).then(v => {
+      if (!v) return;
+      state.bookmarks[v.name] = []; state.cardOrder.push(v.name); save(); renderGroups();
+    });
   });
 }
 
@@ -572,13 +810,32 @@ function bindWallpaper() {
   } catch (e) {}
   document.getElementById('btn-wallpaper').addEventListener('click', nextWallpaper);
   document.getElementById('btn-custom-wall').addEventListener('click', () => {
-    const url = prompt('粘贴图片网址（http(s)://…），留空则从本机选择图片文件：');
-    if (url && /^https?:\/\//.test(url)) { setCustom(url); return; }
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'image/*';
-    inp.onchange = () => { const f = inp.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => setCustom(rd.result); rd.readAsDataURL(f); };
-    inp.click();
+    openDialog({
+      title: '自定义壁纸', icon: 'i-image',
+      desc: '粘贴图片网址，或从本机选一张（本地图片会读成 dataURL 存在浏览器里，不联网）。',
+      fields: [{ key: 'url', label: '图片网址', placeholder: 'https://…（留空则改用本机图片）' }],
+      footLeft: '<button class="push" data-act="file">' + icon('i-image', 'ic-sm') + '从本机选择</button>',
+      okText: '使用该网址',
+      onAction: (act, close) => { if (act === 'file') { close(null); pickLocalImage(); } },
+    }).then(v => {
+      if (!v || !v.url) return;
+      if (!/^https?:\/\//i.test(v.url)) { toast('图片地址要以 http(s):// 开头'); return; }
+      setCustom(v.url);
+    });
   });
+}
+// 从本机选图：读成 dataURL 直接存本地，不经过任何服务
+function pickLocalImage() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    if (f.size > 4 * 1024 * 1024) toast('图片超过 4MB，可能存不下（本地存储有限）');
+    const rd = new FileReader();
+    rd.onload = () => setCustom(rd.result);
+    rd.readAsDataURL(f);
+  };
+  inp.click();
 }
 function setCustom(url) { state.wallpaper.style = 'custom'; state.wallpaper.custom = url; save(); applyBackground(); highlightSwatch(); }
 
@@ -762,9 +1019,11 @@ function bindSettings() {
   });
   // 恢复默认：清空本地存档并重载，页面异常时的一键自救
   document.getElementById('set-reset').addEventListener('click', () => {
-    if (confirm('恢复默认设置？分组、待办、便签等本地数据会一并清空（可先导出备份）。')) {
-      localStorage.removeItem(KEY); location.reload();
-    }
+    confirmDialog({
+      title: '恢复默认设置',
+      desc: '分组、待办、便签、倒计时等<strong>全部本地数据都会被清空</strong>，无法撤销。建议先导出备份。',
+      okText: '清空并恢复', danger: true,
+    }).then(ok => { if (ok) { localStorage.removeItem(KEY); location.reload(); } });
   });
   // 导入
   const file = document.getElementById('import-file');
@@ -777,7 +1036,7 @@ function bindSettings() {
         const data = JSON.parse(rd.result);
         Object.keys(data).forEach(k => { if (state[k] !== undefined) state[k] = data[k]; });
         save(); location.reload();
-      } catch (e) { alert('备份文件格式不正确'); }
+      } catch (e) { toast('备份文件格式不正确，换一个试试'); }
     };
     rd.readAsText(f);
   });
@@ -790,7 +1049,13 @@ function bindNotes() {
   ta.addEventListener('input', () => { state.notes = ta.value; save(); });   // 实时保存
   const clear = document.querySelector('#comp-notes .add-todo');
   if (clear) {
-    clear.addEventListener('click', () => { if (confirm('清空便签？')) { ta.value = ''; state.notes = ''; save(); } });
+    clear.addEventListener('click', () => {
+    if (!ta.value.trim()) { toast('便签已经是空的'); return; }
+    confirmDialog({
+      title: '清空便签', desc: '便签里的内容会被清掉，无法撤销。',
+      okText: '清空', danger: true,
+    }).then(ok => { if (ok) { ta.value = ''; state.notes = ''; save(); } });
+  });
     keyActivate(clear);
   }
 }
@@ -893,7 +1158,7 @@ function bindAmbient() {
   };
   playBtn.addEventListener('click', () => {
     if (noiseNode) { stopNoise(); setPlaying(false); return; }
-    const type = sel.value; if (!type) { alert('先选择一种声音'); return; }
+    const type = sel.value; if (!type) { toast('先从上面选一种声音'); return; }
     ensureAudio(); if (audioCtx.state === 'suspended') audioCtx.resume();
     startNoise(type); setPlaying(true);
   });
