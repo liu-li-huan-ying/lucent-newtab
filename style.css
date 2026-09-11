@@ -311,16 +311,27 @@ body {
 }
 .fold.folded { transform: rotate(-90deg); }
 
-/* ---------- 6. 右上角操作：幽灵按钮，静默待在角落 ---------- */
-.corner-actions { position: fixed; top: 22px; right: 26px; z-index: 55; display: flex; gap: 4px; }
+/* ---------- 6. 右上角操作：玻璃工具条，成组收在角落 ---------- */
+.corner-actions {
+  position: fixed; top: 18px; right: 18px; z-index: 55;
+  display: flex; align-items: center; gap: 2px;
+  padding: 5px; border-radius: var(--r-pill);
+  background: var(--float-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  backdrop-filter: blur(20px) saturate(1.15);
+  border: 1px solid var(--float-line);
+  box-shadow: var(--float-shadow);
+}
 .corner-actions button {
   display: inline-flex; align-items: center; justify-content: center;
   width: 38px; height: 38px; border-radius: var(--r-pill);
   border: 1px solid transparent; background: transparent;
   color: var(--text-dim); cursor: pointer;
-  transition: background .2s ease, color .2s ease, border-color .2s ease, transform .08s ease, opacity .5s var(--ease);
+  transition: background .2s var(--ease), color .2s var(--ease), opacity .5s var(--ease);
 }
-.corner-actions button:hover { background: var(--fill); border-color: var(--stroke); color: var(--text); }
+.corner-actions button:hover { background: var(--fill-hover); color: var(--text); }
+/* 禅模式开启态：用青瓷青点出「正启用」，与旁边明暗按钮的月亮明显区分 */
+.corner-actions button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 
 /* ---------- 7. 焦点区：时钟 + 天气 ---------- */
 .hero { text-align: center; margin: 4px 0 32px; animation: ink-in .8s var(--ease) both; }
