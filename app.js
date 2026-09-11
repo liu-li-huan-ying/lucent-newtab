@@ -60,6 +60,7 @@ function defaults() {
     ],
     notes: '',                                    // 四期：便签内容
     ambient: { type: '', volume: 0.5 },           // 四期：环境音设置
+    zen: false,                                    // 禅模式：持久化配置——开启后新标签页自动进禅模式，直至主动解除
   };
 }
 
@@ -244,9 +245,17 @@ function toggleZen() {
   const on = document.body.classList.toggle('zen');
   const btn = document.getElementById('btn-zen');
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  if (on) {   // 进入时收掉所有浮层，禅境里不应有弹窗
+  state.zen = on; save();              // 持久化：首次开启后，之后新开的标签页也直接进禅模式
+  if (on) {   // 进入时收掉所有浮层，并把视野平滑带回顶部（避免从滚动位置硬跳）
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     document.querySelectorAll('.modal-mask.open, .weather-pop.open').forEach(m => animateOut(m));
   }
+}
+// 初始化时按持久状态恢复禅模式（不动画、不开/关浮层，避免首屏闪烁）
+function applyZen() {
+  if (!state.zen) return;
+  document.body.classList.add('zen');
+  document.getElementById('btn-zen').setAttribute('aria-pressed', 'true');
 }
 function bindZen() {
   document.getElementById('btn-zen').addEventListener('click', toggleZen);
@@ -1497,7 +1506,7 @@ function init() {
   const steps = [
     populateEngineSelect, renderGroups, renderTodos, updateEngineLabel,
     applyBackground, applyVeil, applyTheme, highlightSwatch, applyComponents, applyFolds, showQuote,
-    initWeatherPop, bindEvents,
+    applyZen, initWeatherPop, bindEvents,
   ];
   steps.forEach(fn => {
     try { fn(); }

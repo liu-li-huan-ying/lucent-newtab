@@ -27,7 +27,7 @@
 /* ---------- 0. 重置 ---------- */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 /* 注意：这里不能用 height:100%，否则内容超高时文档不会变高、无法滚动 */
-html { min-height: 100%; }
+html { min-height: 100%; scrollbar-gutter: stable; scroll-behavior: smooth; }
 
 /* ---------- 1. 设计令牌 ---------- */
 :root {
@@ -972,18 +972,15 @@ input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=numb
 /* 基准态给一个足够大的 max-height，让收拢动画可插值；overflow 默认可见，
    不影响正常拖拽 / 焦点；仅在禅模式收拢时才裁切。 */
 .muse, #cards, .add-group-btn, .extras, .hint {
-  max-height: 6000px; overflow: visible;
+  max-height: 2200px; overflow: visible;
   transition: opacity .42s var(--ease), max-height .5s var(--ease),
               margin .5s var(--ease), padding .5s var(--ease);
 }
 body.zen { overflow: hidden; }   /* 单屏：不滚动 */
-body.zen .stage {
-  margin: 0;
-  min-height: 100vh;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 30px; padding: 24px;
-}
+/* 关键：保留 .stage 的 margin:auto，不切 flex 居中。
+   下层收拢让内容高度过渡性变小 → 页面整体高度跟着平滑收缩 → margin:auto 顺势把时钟/搜索
+   平滑「降」到中央，而不是 flex 居中那种从顶对齐瞬跳到居中的生硬感。 */
+body.zen .stage { margin: auto; padding: 24px; }
 body.zen .muse,
 body.zen #cards,
 body.zen .add-group-btn,
@@ -994,7 +991,7 @@ body.zen .hint {
 }
 /* 可见内容放大并轻轻升起到中央，而不是硬切 */
 body.zen .hero { margin: 0; animation: zen-rise .55s var(--ease) both; }
-body.zen .search { max-width: min(680px, 92vw); animation: zen-rise .55s var(--ease) .06s both; }
+body.zen .search { max-width: min(680px, 92vw); margin: 26px auto 0; animation: zen-rise .55s var(--ease) .06s both; }
 body.zen .clock .time { font-size: clamp(60px, 10vw, 112px); }
 @keyframes zen-rise { from { opacity: 0; transform: translateY(12px); } }
 /* 角落收拢成圆：进入禅模式时，玻璃胶囊向右缩成一个圆，只裹住青瓷青同心圆按钮。
