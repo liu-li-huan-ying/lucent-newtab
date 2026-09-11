@@ -979,8 +979,15 @@ input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=numb
 body.zen { overflow: hidden; }   /* 单屏：不滚动 */
 /* 关键：保留 .stage 的 margin:auto，不切 flex 居中。
    下层收拢让内容高度过渡性变小 → 页面整体高度跟着平滑收缩 → margin:auto 顺势把时钟/搜索
-   平滑「降」到中央，而不是 flex 居中那种从顶对齐瞬跳到居中的生硬感。 */
-body.zen .stage { margin: auto; padding: 24px; }
+   平滑「降」到中央，而不是 flex 居中那种从顶对齐瞬跳到居中的生硬感。
+   再用 transform 把整组焦点温和上提一档（translateY 随视口高度收放，clamp 防极端屏过冲），
+   让搜索框落到接近视觉中心、与时钟成一团聚焦，消除「搜索框偏下、悬在下方」的失衡感。
+   transform 平滑可过渡，进出禅模式都不跳；不影响 fixed 角落按钮（其在 stage 之外）。 */
+body.zen .stage {
+  margin: auto; padding: 24px;
+  transform: translateY(clamp(-90px, -8vh, -50px));
+  transition: transform .5s var(--ease);
+}
 body.zen .muse,
 body.zen #cards,
 body.zen .add-group-btn,
@@ -991,7 +998,7 @@ body.zen .hint {
 }
 /* 可见内容放大并轻轻升起到中央，而不是硬切 */
 body.zen .hero { margin: 0; animation: zen-rise .55s var(--ease) both; }
-body.zen .search { max-width: min(680px, 92vw); margin: 26px auto 0; animation: zen-rise .55s var(--ease) .06s both; }
+body.zen .search { max-width: min(680px, 92vw); margin: 18px auto 0; animation: zen-rise .55s var(--ease) .06s both; }
 body.zen .clock .time { font-size: clamp(60px, 10vw, 112px); }
 @keyframes zen-rise { from { opacity: 0; transform: translateY(12px); } }
 /* 角落收拢成圆：进入禅模式时，玻璃胶囊向右缩成一个圆，只裹住青瓷青同心圆按钮。
