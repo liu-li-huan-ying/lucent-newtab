@@ -740,6 +740,9 @@ textarea:focus-visible, a:focus-visible, .chip:focus-visible,
 input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=number]:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
+/* 搜索输入框例外：文本框聚焦自带光标，无需再套强调色描边——
+   绿框把输入框「亮出来」既扎眼又多余（用户明确要求去掉） */
+.search input:focus-visible { outline: none; }
 
 /* ---------- 14. 弹窗（设置 / 快捷键） ---------- */
 .modal-mask {
@@ -994,10 +997,24 @@ body.zen .hero { margin: 0; animation: zen-rise .55s var(--ease) both; }
 body.zen .search { max-width: min(680px, 92vw); animation: zen-rise .55s var(--ease) .06s both; }
 body.zen .clock .time { font-size: clamp(60px, 10vw, 112px); }
 @keyframes zen-rise { from { opacity: 0; transform: translateY(12px); } }
-/* 角落只留禅模式按钮本身，其余隐去，避免禅境里还有一堆图标 */
+/* 角落收拢成圆：进入禅模式时，玻璃胶囊向右缩成一个圆，只裹住青瓷青同心圆按钮。
+   做法：其余按钮宽度/内边距收为零（胶囊右缘固定，左缘随之右移，视觉即「向右滑动收拢」），
+   间隙同时归零，最终只剩一枚圆形玻璃钮。全程无位移、无缩放，靠布局自身收拢（克制）。 */
+/* 基准态补齐过渡项（body 前缀提高优先级，覆盖「按压反馈」里那条只含 transform/background 的 transition）；
+   visibility 延迟到收拢结束后再隐藏，键盘 Tab 不会停在已收起的按钮上 */
+body .corner-actions button {
+  transition: width .38s var(--ease), padding .38s var(--ease), border-width .38s var(--ease),
+              opacity .3s var(--ease), background .2s ease, color .2s ease, transform .08s ease,
+              visibility 0s 0s;
+}
+body .corner-actions { transition: gap .38s var(--ease); }
+body.zen .corner-actions { gap: 0; }
 body.zen .corner-actions button:not(#btn-zen) {
-  opacity: 0; pointer-events: none;
-  transition: opacity .35s var(--ease);
+  width: 0; min-width: 0; padding: 0; border-width: 0;
+  opacity: 0; overflow: hidden; pointer-events: none;
+  visibility: hidden;
+  transition: width .38s var(--ease), padding .38s var(--ease), border-width .38s var(--ease),
+              opacity .26s var(--ease), visibility 0s .38s;
 }
 body.zen #btn-zen { color: var(--accent); }
 
