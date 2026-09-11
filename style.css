@@ -60,6 +60,13 @@ html::-webkit-scrollbar { width: 0; height: 0; }   /* Blink / WebKit */
   /* 统一缓动：ease-out，无回弹。全站动效共用，改一处即可统一节奏 */
   --ease: cubic-bezier(.22,.61,.36,1);
 
+  /* 禅模式过渡单独一套：它是全站唯一一处「整体形变」（一屏以上高度收拢 + 时钟字号放大）。
+     --ease 是前重后轻的 ease-out，用在这种大形变上就成了「先猛一下、再慢慢停」，
+     正是「先变大、再猛地往下」的观感来源。改用对称的 standard 曲线 + 750ms，
+     起步与收尾都缓，于是「一边慢慢下移、一边慢慢变大」。 */
+  --zen-dur: .75s;
+  --zen-ease: cubic-bezier(.4, 0, .2, 1);
+
   /* 控件填充（作用于面板内部） */
   --fill: rgba(247,243,236,.055);
   --fill-hover: rgba(247,243,236,.11);
@@ -379,7 +386,7 @@ body {
 .corner-actions button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 
 /* ---------- 7. 焦点区：时钟 + 天气 ---------- */
-.hero { text-align: center; margin: 4px 0 32px; animation: ink-in .8s var(--ease) both; transition: margin .5s var(--ease); }
+.hero { text-align: center; margin: 4px 0 32px; animation: ink-in .8s var(--ease) both; transition: margin var(--zen-dur) var(--zen-ease); }
 /* 「墨晕」：像墨落在纸上慢慢化开——模糊收束 + 极小位移，不用回弹 */
 @keyframes ink-in { from { opacity: 0; filter: blur(4px); translate: 0 3px; } }
 .clock .time {
@@ -388,7 +395,7 @@ body {
   letter-spacing: 2px; line-height: 1;
   font-variant-numeric: tabular-nums;   /* 秒跳时数字不抖 */
   text-shadow: var(--hero-shadow);
-  transition: font-size .5s var(--ease);  /* 与收拢同长（.5s）、同缓动：时钟边下移边匀速变大 */
+  transition: font-size var(--zen-dur) var(--zen-ease);  /* 与收拢同长同缓动：时钟边下移边慢慢变大 */
 }
 .clock .date {
   margin-top: 15px; font-size: var(--fs-9);
@@ -418,7 +425,7 @@ body {
   padding: 7px 7px 7px 10px; border-radius: var(--r-pill);
   overflow: visible; z-index: 30;
   /* 禅模式加宽到 680px、并下移 18px，与时钟同长同缓动地一起走，避免宽度/间距突跳 */
-  transition: max-width .5s var(--ease), margin .5s var(--ease);
+  transition: max-width var(--zen-dur) var(--zen-ease), margin var(--zen-dur) var(--zen-ease);
   /* 覆盖 .glass 的大投影：命令条靠底色交代边界，用极浅的浮起感即可 */
   box-shadow: var(--search-shadow);
 }
@@ -559,7 +566,8 @@ body {
   border: 1px solid var(--panel-line); background: var(--panel-bg);
   color: var(--text-dim); font-size: var(--fs-9); font-family: inherit; cursor: pointer;
   transition: color .2s ease, border-color .2s ease, background .2s ease, transform .08s ease,
-              opacity .42s var(--ease), max-height .5s var(--ease), margin .5s var(--ease), padding .5s var(--ease);
+              opacity .5s var(--zen-ease), max-height var(--zen-dur) var(--zen-ease),
+              margin var(--zen-dur) var(--zen-ease), padding var(--zen-dur) var(--zen-ease);
 }
 .add-group-btn:hover { color: var(--text); border-color: var(--panel-line-hi); }
 
@@ -1019,8 +1027,8 @@ input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=numb
 /* 收拢过渡由下面这组承载（不含 .add-group-btn —— 它自带过渡，若在此重复声明会因同优先级、
    靠后生效而把它的 hover/按压过渡一并顶掉；其过渡已并入 .add-group-btn 自身那条）。 */
 .muse, #cards, .extras, .hint {
-  transition: opacity .42s var(--ease), max-height .5s var(--ease),
-              margin .5s var(--ease), padding .5s var(--ease);
+  transition: opacity .5s var(--zen-ease), max-height var(--zen-dur) var(--zen-ease),
+              margin var(--zen-dur) var(--zen-ease), padding var(--zen-dur) var(--zen-ease);
 }
 body.zen { overflow: hidden; }   /* 单屏：不滚动 */
 /* 关键：保留 .stage 的 margin:auto，不切 flex 居中。
@@ -1032,7 +1040,7 @@ body.zen { overflow: hidden; }   /* 单屏：不滚动 */
 body.zen .stage {
   margin: auto; padding: 24px;
   transform: translateY(clamp(-90px, -8vh, -50px));
-  transition: transform .5s var(--ease);
+  transition: transform var(--zen-dur) var(--zen-ease);
 }
 body.zen .muse,
 body.zen #cards,

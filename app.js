@@ -254,7 +254,7 @@ function toggleZen() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     document.querySelectorAll('.modal-mask.open, .weather-pop.open').forEach(m => animateOut(m));
   } else {
-    setTimeout(unpinZenCollapse, 560);   // 展开完成后再放开钉高，之后内容再多也不会被截断
+    setTimeout(unpinZenCollapse, 820);   // 展开完成后再放开钉高（需 > --zen-dur 的 750ms），之后内容再多也不会被截断
   }
 }
 
@@ -286,6 +286,7 @@ function applyZen() {
   if (!state.zen) return;
   document.body.classList.add('zen');
   document.getElementById('btn-zen').setAttribute('aria-pressed', 'true');
+  scheduleZenIdle();   // 恢复出来的禅模式也要启动「闲置数秒隐去角落圆钮」，否则持久开启的页面永远不隐
 }
 function bindZen() {
   document.getElementById('btn-zen').addEventListener('click', toggleZen);
@@ -1632,7 +1633,7 @@ function init() {
   const steps = [
     populateEngineSelect, renderGroups, renderTodos, updateEngineLabel,
     applyBackground, applyVeil, applyTheme, highlightSwatch, applyComponents, applyFolds, showQuote,
-    applyZen, initWeatherPop, bindEvents, initScrollbar,
+    applyZen, initWeatherPop, bindEvents, initScrollbar, bindZenIdle,
   ];
   steps.forEach(fn => {
     try { fn(); }
