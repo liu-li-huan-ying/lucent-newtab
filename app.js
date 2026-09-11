@@ -246,6 +246,7 @@ function toggleZen() {
   const btn = document.getElementById('btn-zen');
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   state.zen = on; save();              // 持久化：首次开启后，之后新开的标签页也直接进禅模式
+  if (sbxRefresh) sbxRefresh();        // 禅模式无滚动：让自绘滚动条立刻重新评估（随即隐去）
   if (on) {   // 进入时收掉所有浮层，并把视野平滑带回顶部（避免从滚动位置硬跳）
     window.scrollTo({ top: 0, behavior: 'smooth' });
     document.querySelectorAll('.modal-mask.open, .weather-pop.open').forEach(m => animateOut(m));
@@ -1501,12 +1502,80 @@ function keyActivate(el) {
   });
 }
 
+/* ---------- 自绘浮层滚动条 ----------
+   原生滚动条各浏览器宽窄/圆角/配色各不相同，且会预留一条空带（本页压在照片上，空带很扎眼）。
+   这里用 position:fixed 的浮层来画：不占布局 → 无空带；样式全由 CSS 掌控 → Chrome / Edge / 火狐 一致；
+   滚动时才淡入、闲置 1.2s 自动隐去；内容不满一屏或禅模式下压根不出现。
+   原生滚动条已在 style.css 里对 html 隐藏，滚动本身仍走浏览器原生（滚轮 / 触控板 / 键盘都不受影响）。 */
+let sbxRefresh = null;
+function initScrollbar() {
+  const bar = document.getElementById('sbx');
+  if (!bar) return;
+  const thumb = bar.querySelector('.sbx-thumb');
+  const doc = document.documentElement;
+  const INSET = 6;                 // 与 .sbx 的 top / bottom 内缩保持一致
+  let hideTimer = 0, dragging = false, dragY = 0, dragTop = 0;
+
+  const maxScroll = () => Math.max(0, doc.scrollHeight - doc.clientHeight);
+  const blocked = () => maxScroll() <= 1 || !!document.querySelector('.modal-mask.open');
+
+  // 只更新几何（高度 / 位移），不碰显隐
+  function render() {
+    if (maxScroll() <= 1) return;
+    const trackH = window.innerHeight - INSET * 2;
+    const thumbH = Math.max(36, Math.round(trackH * (doc.clientHeight / doc.scrollHeight)));
+    const y = (doc.scrollTop / maxScroll()) * (trackH - thumbH);
+    thumb.style.height = thumbH + 'px';
+    thumb.style.transform = 'translateY(' + y + 'px)';   // .sbx 自身已有 top/bottom 内缩，这里从 0 起算
+  }
+  function show() {
+    if (blocked()) { bar.classList.remove('on'); return; }
+    render();
+    bar.classList.add('on');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { if (!dragging) bar.classList.remove('on'); }, 1200);
+  }
+  sbxRefresh = () => { if (blocked()) bar.classList.remove('on'); else render(); };
+
+  window.addEventListener('scroll', show, { passive: true });
+  window.addEventListener('resize', () => { render(); show(); }, { passive: true });
+
+  // 内容高度变化（增删待办 / 便签 / 折叠 / 字体载入）时同步几何
+  if (window.ResizeObserver) new ResizeObserver(() => sbxRefresh()).observe(document.body);
+
+  // 拖拽：跟手，拖拽期间临时关掉平滑滚动（配合 style.css 的 html.sb-drag）
+  thumb.addEventListener('pointerdown', e => {
+    if (maxScroll() <= 1) return;
+    dragging = true; bar.classList.add('drag'); doc.classList.add('sb-drag');
+    dragY = e.clientY; dragTop = doc.scrollTop;
+    try { thumb.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  });
+  thumb.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const span = (window.innerHeight - INSET * 2) - thumb.offsetHeight;
+    if (span <= 0) return;
+    doc.scrollTop = dragTop + (e.clientY - dragY) * (maxScroll() / span);
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false; bar.classList.remove('drag'); doc.classList.remove('sb-drag'); show();
+  };
+  thumb.addEventListener('pointerup', endDrag);
+  thumb.addEventListener('pointercancel', endDrag);
+  window.addEventListener('pointerup', endDrag);
+  thumb.addEventListener('mouseenter', () => { clearTimeout(hideTimer); bar.classList.add('on'); });
+  thumb.addEventListener('mouseleave', () => { if (!dragging) show(); });
+
+  render();
+}
+
 function init() {
   // 每一步单独兜错：任何一步出错只影响它自己，不会让整页变空白
   const steps = [
     populateEngineSelect, renderGroups, renderTodos, updateEngineLabel,
     applyBackground, applyVeil, applyTheme, highlightSwatch, applyComponents, applyFolds, showQuote,
-    applyZen, initWeatherPop, bindEvents,
+    applyZen, initWeatherPop, bindEvents, initScrollbar,
   ];
   steps.forEach(fn => {
     try { fn(); }
