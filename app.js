@@ -15,6 +15,7 @@ function defaults() {
   return {
     veil: 0.40,                                    // 蒙版浓度（明暗）
     theme: 'dark',                                 // 主题：dark 深色（白字） / light 浅色（深字）
+    showSeconds: false,                            // 时钟是否显示秒（默认只到分，更安静）
     // 壁纸：style = 分类名 / 'custom' / 'bing'
     // idx 记住每个分类「当前第几张」，保证点同一个分类永远是同一张，不再随机跳变
     wallpaper: { style: 'nature', custom: null, idx: { nature: 0, city: 0, minimal: 0, abstract: 0 } },
@@ -237,12 +238,27 @@ function toggleTheme() {
   toast('主题：' + (state.theme === 'light' ? '浅色' : '深色'));
 }
 
+/* 禅模式（Zen）：只留时钟 + 搜索，其余柔和淡出；再按恢复。
+   不申请任何权限、不弹窗，是「打开即专注」的极简形态。 */
+function toggleZen() {
+  const on = document.body.classList.toggle('zen');
+  const btn = document.getElementById('btn-zen');
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (on) {   // 进入时收掉所有浮层，禅境里不应有弹窗
+    document.querySelectorAll('.modal-mask.open, .weather-pop.open').forEach(m => animateOut(m));
+  }
+}
+function bindZen() {
+  document.getElementById('btn-zen').addEventListener('click', toggleZen);
+}
+
 /* ---------- 3. 时钟 ---------- */
 function tick() {
   const d = new Date();
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
-  document.getElementById('clock-time').textContent = hh + ':' + mm;
+  const ss = state.showSeconds ? ':' + String(d.getSeconds()).padStart(2, '0') : '';
+  document.getElementById('clock-time').textContent = hh + ':' + mm + ss;
   const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   document.getElementById('clock-date').textContent =
     days[d.getDay()] + ' · ' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
@@ -1032,6 +1048,7 @@ function bindSettings() {
     document.getElementById('set-wall').value = state.wallpaper.style === 'custom' ? 'nature' : state.wallpaper.style;
     document.getElementById('set-veil').value = state.veil;
     document.getElementById('set-theme').value = state.theme === 'light' ? 'light' : 'dark';
+    document.getElementById('set-seconds').checked = state.showSeconds;
     document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => { cb.checked = state.components[cb.dataset.comp]; });
     renderEngineManager();            // 打开时刷新自定义引擎列表
     openFloat(modal);
@@ -1047,6 +1064,8 @@ function bindSettings() {
   document.getElementById('set-veil').addEventListener('input', e => { state.veil = parseFloat(e.target.value); save(); applyVeil(); });
   // 主题（深色 / 浅色）
   document.getElementById('set-theme').addEventListener('change', e => { state.theme = e.target.value; save(); applyTheme(); });
+  // 时钟显示秒
+  document.getElementById('set-seconds').addEventListener('change', e => { state.showSeconds = e.target.checked; save(); tick(); });
   // 组件显隐
   document.querySelectorAll('#settings-modal input[data-comp]').forEach(cb => {
     cb.addEventListener('change', () => { state.components[cb.dataset.comp] = cb.checked; save(); applyComponents(); });
@@ -1234,6 +1253,7 @@ function bindKeys() {
     if (e.key === '/') { e.preventDefault(); document.getElementById('search-input').focus(); }
     else if (e.key === 'w' || e.key === 'W') { nextWallpaper(); }
     else if (e.key === 't' || e.key === 'T') { toggleTheme(); }
+    else if (e.key === 'z' || e.key === 'Z') { toggleZen(); }
     else if (e.key === '?') { toggleKbd(); }
     else if (/^[1-9]$/.test(e.key)) {                 // 数字键直达书签（弹窗开着时不响应）
       if (document.querySelector('.modal-mask.open')) return;
@@ -1262,15 +1282,45 @@ function pomoStart() {
   if (pomoTimer) { clearInterval(pomoTimer); pomoTimer = null; document.getElementById('pomo-start').textContent = '继续'; return; }
   if (!pomoLeft) pomoLeft = pomoTotalSec();
   document.getElementById('pomo-start').textContent = '暂停';
+  // 计时是用户主动开启的「手势」，顺手把通知权限与音频上下文都准备好，
+  // 这样结束时才能温柔提示（否则浏览器会拦声音、通知也发不出）
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+  ensureAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   pomoTimer = setInterval(() => {
     pomoLeft--;
     if (pomoLeft <= 0) {                            // 一段结束 → 切换专注/休息
       clearInterval(pomoTimer); pomoTimer = null;
       pomoIsBreak = !pomoIsBreak; pomoLeft = pomoTotalSec();
       toast(pomoIsBreak ? '休息一下 ☕' : '开始专注 💪');
+      notifyPomodoro(pomoIsBreak);
     }
     renderPomodoro();
   }, 1000);
+}
+/* 一段结束的温柔提示：系统通知（已授权时）+ 一声短促正弦收尾音。
+   不弹原生 alert —— 那会破坏整页质感，也打断心流。 */
+function notifyPomodoro(isBreak) {
+  const text = isBreak ? '休息结束，开始下一轮专注' : '专注完成，休息一下';
+  // 轻柔收尾音：正弦音，快速起、缓慢落，不刺耳
+  try {
+    ensureAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = isBreak ? 659.25 : 523.25;
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + 1.5);
+  } catch (e) {}
+  // 系统通知：仅已授权时发，未授权静默回落到 toast（不强制要权限）
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification('番茄钟', { body: text }); } catch (e) {}
+  }
 }
 function pomoReset() {
   if (pomoTimer) { clearInterval(pomoTimer); pomoTimer = null; }
@@ -1396,6 +1446,7 @@ function bindEvents() {
   bindCountdown();
   bindFolds();
   bindKeys();
+  bindZen();
 
   // 四期④：天气弹窗开关 + 点击外部关闭
   const wp = document.getElementById('weather-pop');

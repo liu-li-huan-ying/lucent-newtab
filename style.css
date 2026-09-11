@@ -161,6 +161,23 @@ body[data-theme="light"] {
 /* 浅色主题下让滚动条 / 原生控件也跟着变浅（:has 在现代 Chrome/Edge 可用） */
 html:has(body[data-theme="light"]) { color-scheme: light; }
 
+/* 选区：用强调色而非系统蓝，消除「蓝选块」的割裂感（深浅主题都协调） */
+::selection { background: var(--accent); color: var(--ink); }
+
+/* 主题化细滚动条：设置弹窗 / 便签 / 待办 / 引擎菜单 / 倒计时，替换系统原生丑条 */
+.modal-body, #notes-area, #todo-list, .engine-menu, #cd-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-line-hi) transparent;
+}
+.modal-body::-webkit-scrollbar, #notes-area::-webkit-scrollbar, #todo-list::-webkit-scrollbar,
+.engine-menu::-webkit-scrollbar, #cd-list::-webkit-scrollbar { width: 8px; height: 8px; }
+.modal-body::-webkit-scrollbar-thumb, #notes-area::-webkit-scrollbar-thumb, #todo-list::-webkit-scrollbar-thumb,
+.engine-menu::-webkit-scrollbar-thumb, #cd-list::-webkit-scrollbar-thumb {
+  background: var(--panel-line-hi); border-radius: 999px;
+}
+.modal-body::-webkit-scrollbar-track, #notes-area::-webkit-scrollbar-track, #todo-list::-webkit-scrollbar-track,
+.engine-menu::-webkit-scrollbar-track, #cd-list::-webkit-scrollbar-track { background: transparent; }
+
 /* ---------- 2. 背景：壁纸层 + 蒙版层 ---------- */
 body {
   font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC",
@@ -175,6 +192,9 @@ body {
   align-items: flex-start;
   justify-content: center;
   background: var(--page-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* 壁纸层：真实照片由 JS 写入 --wall-url。
@@ -298,7 +318,7 @@ body {
   width: 38px; height: 38px; border-radius: var(--r-pill);
   border: 1px solid transparent; background: transparent;
   color: var(--text-dim); cursor: pointer;
-  transition: background .2s ease, color .2s ease, border-color .2s ease, transform .08s ease;
+  transition: background .2s ease, color .2s ease, border-color .2s ease, transform .08s ease, opacity .5s var(--ease);
 }
 .corner-actions button:hover { background: var(--fill); border-color: var(--stroke); color: var(--text); }
 
@@ -479,7 +499,7 @@ body {
   margin: 14px 0 6px; padding: 8px 14px; border-radius: var(--r-pill);
   border: 1px solid var(--panel-line); background: var(--panel-bg);
   color: var(--text-dim); font-size: var(--fs-9); font-family: inherit; cursor: pointer;
-  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .08s ease;
+  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .08s ease, opacity .5s var(--ease);
 }
 .add-group-btn:hover { color: var(--text); border-color: var(--panel-line-hi); }
 
@@ -618,7 +638,7 @@ body {
 }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .cal-w { text-align: center; font-size: var(--fs-10); color: var(--text-faint); padding: 2px 0; }
-.cal-cell { text-align: center; font-size: var(--fs-9); color: var(--text-dim); padding: 6px 0; border-radius: 7px; }
+.cal-cell { text-align: center; font-size: var(--fs-9); color: var(--text-dim); padding: 6px 0; border-radius: 7px; font-variant-numeric: tabular-nums; }
 .cal-cell.empty { visibility: hidden; }
 .cal-cell.today { background: var(--accent); color: var(--ink); font-weight: 700; }
 
@@ -696,7 +716,8 @@ input:focus-visible, button:focus-visible, select:focus-visible,
 textarea:focus-visible, a:focus-visible, .chip:focus-visible,
 .swatch:focus-visible, [draggable]:focus-visible,
 [role="button"]:focus-visible, .x-btn:focus-visible,
-.corner-actions button:focus-visible {
+.corner-actions button:focus-visible,
+input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=number]:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
@@ -919,6 +940,23 @@ textarea:focus-visible, a:focus-visible, .chip:focus-visible,
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- 16.5 禅模式（Zen）：只留时钟 + 搜索，其余柔和退场 ---------- */
+/* 一键（Z 或角落按钮）进入「纯净打开页」：题记 / 分组 / 工具 / 提示全部淡出，
+   焦点只剩时钟与搜索。再按一次恢复。退场用透明度，不位移、不缩放（克制）。
+   透明度过渡放在基准元素上，进入与退出都柔和。 */
+.muse, #cards, .extras, .hint { transition: opacity .5s var(--ease); }
+body.zen .muse,
+body.zen #cards,
+body.zen .add-group-btn,
+body.zen .extras,
+body.zen .hint { opacity: 0; pointer-events: none; }
+/* 角落只留禅模式按钮本身，其余隐去，避免禅境里还有一堆图标 */
+body.zen .corner-actions button:not(#btn-zen) {
+  opacity: 0; pointer-events: none;
+  transition: opacity .35s var(--ease);
+}
+body.zen #btn-zen { color: var(--accent); }
 
 /* ---------- 17. 响应式 ---------- */
 /* 矮屏（1080p 笔记本可视高度约 900px）：收一收焦点区与纵向间距，
