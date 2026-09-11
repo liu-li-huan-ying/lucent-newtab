@@ -84,6 +84,9 @@ html { min-height: 100%; }
   /* 语义色（中国风传统色） */
   --accent: #57a99c;            /* 青瓷青：点睛强调 */
   --accent-soft: rgba(87,169,156,.30);
+  /* 输入框内选中文字：极淡中性半透明，几乎只是一层若隐若现的灰度，
+     不像彩色块那样「亮出来」——编辑态应当安静，不该抢戏 */
+  --sel-field: rgba(247,243,236,.18);
   --success: #73a471;           /* 竹青绿：完成 / 播放中 */
   --danger: #c0504d;            /* 胭脂红：删除 / 危险 */
   --warning: #c8913c;           /* 赭石黄：编辑悬停 */
@@ -154,6 +157,7 @@ body[data-theme="light"] {
   /* 浅底上语义色加深，保证 4.5:1 */
   --accent: #3d7d70;
   --accent-soft: rgba(61,125,112,.26);
+  --sel-field: rgba(42,36,29,.14);
   --success: #557a45;
   --danger: #a23b36;
   --warning: #96681f;
@@ -161,8 +165,12 @@ body[data-theme="light"] {
 /* 浅色主题下让滚动条 / 原生控件也跟着变浅（:has 在现代 Chrome/Edge 可用） */
 html:has(body[data-theme="light"]) { color-scheme: light; }
 
-/* 选区：用强调色而非系统蓝，消除「蓝选块」的割裂感（深浅主题都协调） */
+/* 选区：正文用强调色而非系统蓝，消除「蓝选块」的割裂感（深浅主题都协调）。
+   但输入框是「编辑态」的隐私语境，选中文字不该像个彩色块亮出来——改极淡中性灰，安静自然。 */
 ::selection { background: var(--accent); color: var(--ink); }
+input::selection, textarea::selection, .search ::selection {
+  background: var(--sel-field); color: var(--text);
+}
 
 /* 主题化细滚动条：设置弹窗 / 便签 / 待办 / 引擎菜单 / 倒计时，替换系统原生丑条 */
 .modal-body, #notes-area, #todo-list, .engine-menu, #cd-list {
@@ -343,6 +351,7 @@ body {
   letter-spacing: 2px; line-height: 1;
   font-variant-numeric: tabular-nums;   /* 秒跳时数字不抖 */
   text-shadow: var(--hero-shadow);
+  transition: font-size .45s var(--ease);  /* 禅模式放大时钟时平滑过渡，不突跳 */
 }
 .clock .date {
   margin-top: 15px; font-size: var(--fs-9);
@@ -952,16 +961,39 @@ input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=numb
   }
 }
 
-/* ---------- 16.5 禅模式（Zen）：只留时钟 + 搜索，其余柔和退场 ---------- */
-/* 一键（Z 或角落按钮）进入「纯净打开页」：题记 / 分组 / 工具 / 提示全部淡出，
-   焦点只剩时钟与搜索。再按一次恢复。退场用透明度，不位移、不缩放（克制）。
-   透明度过渡放在基准元素上，进入与退出都柔和。 */
-.muse, #cards, .extras, .hint { transition: opacity .5s var(--ease); }
+/* ---------- 16.5 禅模式（Zen）：真正的单屏专注视图 ---------- */
+/* 之前的禅模式只是把下方内容透明度归零，它们仍占着文档流 → 页长不变、往下滚一片空，毫无意义。
+   重做：下方整块（题记 / 壁纸栏 / 分组 / 工具 / 提示）收拢并移出文档流，
+   不再留空、不再可滚动；时钟 + 天气 + 搜索放大并垂直居中，成为唯一焦点。
+   退场用「透明度 + 高度收拢」，不位移、不缩放（克制）。 */
+/* 基准态给一个足够大的 max-height，让收拢动画可插值；overflow 默认可见，
+   不影响正常拖拽 / 焦点；仅在禅模式收拢时才裁切。 */
+.muse, #cards, .add-group-btn, .extras, .hint {
+  max-height: 6000px; overflow: visible;
+  transition: opacity .42s var(--ease), max-height .5s var(--ease),
+              margin .5s var(--ease), padding .5s var(--ease);
+}
+body.zen { overflow: hidden; }   /* 单屏：不滚动 */
+body.zen .stage {
+  margin: 0;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 30px; padding: 24px;
+}
 body.zen .muse,
 body.zen #cards,
 body.zen .add-group-btn,
 body.zen .extras,
-body.zen .hint { opacity: 0; pointer-events: none; }
+body.zen .hint {
+  opacity: 0; max-height: 0; margin: 0; padding: 0;
+  overflow: hidden; pointer-events: none;
+}
+/* 可见内容放大并轻轻升起到中央，而不是硬切 */
+body.zen .hero { margin: 0; animation: zen-rise .55s var(--ease) both; }
+body.zen .search { max-width: min(680px, 92vw); animation: zen-rise .55s var(--ease) .06s both; }
+body.zen .clock .time { font-size: clamp(60px, 10vw, 112px); }
+@keyframes zen-rise { from { opacity: 0; transform: translateY(12px); } }
 /* 角落只留禅模式按钮本身，其余隐去，避免禅境里还有一堆图标 */
 body.zen .corner-actions button:not(#btn-zen) {
   opacity: 0; pointer-events: none;
