@@ -242,15 +242,44 @@ function toggleTheme() {
 /* 禅模式（Zen）：只留时钟 + 搜索，其余柔和淡出；再按恢复。
    不申请任何权限、不弹窗，是「打开即专注」的极简形态。 */
 function toggleZen() {
-  const on = document.body.classList.toggle('zen');
+  const on = !document.body.classList.contains('zen');
+  pinZenCollapse(!on);                 // 双向都先钉高：!on=正在展开时按下标量取内容高度（见下方说明）
+  document.body.classList.toggle('zen', on);
   const btn = document.getElementById('btn-zen');
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   state.zen = on; save();              // 持久化：首次开启后，之后新开的标签页也直接进禅模式
   if (sbxRefresh) sbxRefresh();        // 禅模式无滚动：让自绘滚动条立刻重新评估（随即隐去）
+  if (on) scheduleZenIdle(); else revealZenBtn();   // 角落按钮：进禅模式启动「闲置自隐」，退出则恢复常显
   if (on) {   // 进入时收掉所有浮层，并把视野平滑带回顶部（避免从滚动位置硬跳）
     window.scrollTo({ top: 0, behavior: 'smooth' });
     document.querySelectorAll('.modal-mask.open, .weather-pop.open').forEach(m => animateOut(m));
+  } else {
+    setTimeout(unpinZenCollapse, 560);   // 展开完成后再放开钉高，之后内容再多也不会被截断
   }
+}
+
+/* 收拢高度「钉高」：把各可折叠块的 --coll-h 钉到它的真实 border-box 高度。
+   于是 max-height 的过渡始终是「真实高度 ↔ 0」，从第一帧起就线性收拢 / 展开；
+   若从一个大值（如 2200 / 9999px）缓动，前段高度还没被限制到、画面纹丝不动，之后才猛收，
+   观感就变成「先变大、再猛地往下」。收 / 展结束后再放开钉高，避免内容变化被旧值截断。
+   expanding=true 表示当前处于收拢态（要展开）：此时量不到可见高度，用 scrollHeight（收拢态下
+   仍是内容高度）补上边框宽度；否则直接量 offsetHeight，零跳动。 */
+const ZEN_COLLAPSE = '.muse, #cards, .add-group-btn, .extras, .hint';
+function pinZenCollapse(expanding) {
+  document.querySelectorAll(ZEN_COLLAPSE).forEach(el => {
+    let h;
+    if (expanding) {
+      const cs = getComputedStyle(el);
+      h = el.scrollHeight + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    } else {
+      h = el.offsetHeight;
+    }
+    el.style.setProperty('--coll-h', h + 'px');
+  });
+  void document.body.offsetHeight;     // 强制重排：先让浏览器接受钉高，再切 zen
+}
+function unpinZenCollapse() {
+  document.querySelectorAll(ZEN_COLLAPSE).forEach(el => el.style.removeProperty('--coll-h'));
 }
 // 初始化时按持久状态恢复禅模式（不动画、不开/关浮层，避免首屏闪烁）
 function applyZen() {
@@ -1568,6 +1597,34 @@ function initScrollbar() {
   thumb.addEventListener('mouseleave', () => { if (!dragging) show(); });
 
   render();
+}
+
+/* ---------- 禅模式角落按钮：闲置数秒自动隐去 ----------
+   进禅模式后若不理会，几秒后那枚圆钮淡出，让画面彻底安静；鼠标再掠到右上角热区即淡入。
+   悬停 / 键盘聚焦都会唤出并重置计时；退出禅模式立刻恢复常显。纯观感增强，不影响任何功能。 */
+const ZEN_IDLE_MS = 3000;
+let zenIdleTimer = 0;
+function revealZenBtn() {                    // 唤出并重置计时
+  clearTimeout(zenIdleTimer);
+  document.body.classList.remove('zen-idle');
+}
+function scheduleZenIdle() {                 // 数秒后隐去（不在禅模式、或仍悬停/聚焦时不算数）
+  clearTimeout(zenIdleTimer);
+  document.body.classList.remove('zen-idle');
+  if (!document.body.classList.contains('zen')) return;
+  zenIdleTimer = setTimeout(() => {
+    if (!document.body.classList.contains('zen')) return;
+    if (document.querySelector('.corner-actions:hover, .corner-actions:focus-within')) return;
+    document.body.classList.add('zen-idle');
+  }, ZEN_IDLE_MS);
+}
+function bindZenIdle() {
+  const bar = document.querySelector('.corner-actions');
+  if (!bar) return;
+  bar.addEventListener('mouseenter', revealZenBtn);
+  bar.addEventListener('mouseleave', scheduleZenIdle);
+  bar.addEventListener('focusin', revealZenBtn);
+  bar.addEventListener('focusout', scheduleZenIdle);
 }
 
 function init() {

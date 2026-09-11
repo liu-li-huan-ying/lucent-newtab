@@ -379,7 +379,7 @@ body {
 .corner-actions button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 
 /* ---------- 7. 焦点区：时钟 + 天气 ---------- */
-.hero { text-align: center; margin: 4px 0 32px; animation: ink-in .8s var(--ease) both; }
+.hero { text-align: center; margin: 4px 0 32px; animation: ink-in .8s var(--ease) both; transition: margin .5s var(--ease); }
 /* 「墨晕」：像墨落在纸上慢慢化开——模糊收束 + 极小位移，不用回弹 */
 @keyframes ink-in { from { opacity: 0; filter: blur(4px); translate: 0 3px; } }
 .clock .time {
@@ -388,7 +388,7 @@ body {
   letter-spacing: 2px; line-height: 1;
   font-variant-numeric: tabular-nums;   /* 秒跳时数字不抖 */
   text-shadow: var(--hero-shadow);
-  transition: font-size .45s var(--ease);  /* 禅模式放大时钟时平滑过渡，不突跳 */
+  transition: font-size .5s var(--ease);  /* 与收拢同长（.5s）、同缓动：时钟边下移边匀速变大 */
 }
 .clock .date {
   margin-top: 15px; font-size: var(--fs-9);
@@ -417,6 +417,8 @@ body {
   max-width: 620px; margin: 0 auto;
   padding: 7px 7px 7px 10px; border-radius: var(--r-pill);
   overflow: visible; z-index: 30;
+  /* 禅模式加宽到 680px、并下移 18px，与时钟同长同缓动地一起走，避免宽度/间距突跳 */
+  transition: max-width .5s var(--ease), margin .5s var(--ease);
   /* 覆盖 .glass 的大投影：命令条靠底色交代边界，用极浅的浮起感即可 */
   box-shadow: var(--search-shadow);
 }
@@ -556,7 +558,8 @@ body {
   margin: 14px 0 6px; padding: 8px 14px; border-radius: var(--r-pill);
   border: 1px solid var(--panel-line); background: var(--panel-bg);
   color: var(--text-dim); font-size: var(--fs-9); font-family: inherit; cursor: pointer;
-  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .08s ease, opacity .5s var(--ease);
+  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .08s ease,
+              opacity .42s var(--ease), max-height .5s var(--ease), margin .5s var(--ease), padding .5s var(--ease);
 }
 .add-group-btn:hover { color: var(--text); border-color: var(--panel-line-hi); }
 
@@ -1006,10 +1009,16 @@ input[type=range]:focus-visible, input[type=date]:focus-visible, input[type=numb
    重做：下方整块（题记 / 壁纸栏 / 分组 / 工具 / 提示）收拢并移出文档流，
    不再留空、不再可滚动；时钟 + 天气 + 搜索放大并垂直居中，成为唯一焦点。
    退场用「透明度 + 高度收拢」，不位移、不缩放（克制）。 */
-/* 基准态给一个足够大的 max-height，让收拢动画可插值；overflow 默认可见，
-   不影响正常拖拽 / 焦点；仅在禅模式收拢时才裁切。 */
+/* 收拢高度走变量 --coll-h：进入禅模式前由 JS 把它钉到各块「真实高度」，
+   收拢才会从第一帧就线性推进。若固定用一个大值（如 2200px），动画前段高度还没被
+   限制到、画面纹丝不动，之后才猛收——那正是「先变大、再猛地往下」的元凶。
+   默认值给得足够大，确保正常模式下永不裁切。overflow 默认可见，仅在收拢时裁切。 */
 .muse, #cards, .add-group-btn, .extras, .hint {
-  max-height: 2200px; overflow: visible;
+  max-height: var(--coll-h, 9999px); overflow: visible;
+}
+/* 收拢过渡由下面这组承载（不含 .add-group-btn —— 它自带过渡，若在此重复声明会因同优先级、
+   靠后生效而把它的 hover/按压过渡一并顶掉；其过渡已并入 .add-group-btn 自身那条）。 */
+.muse, #cards, .extras, .hint {
   transition: opacity .42s var(--ease), max-height .5s var(--ease),
               margin .5s var(--ease), padding .5s var(--ease);
 }
@@ -1033,11 +1042,13 @@ body.zen .hint {
   opacity: 0; max-height: 0; margin: 0; padding: 0;
   overflow: hidden; pointer-events: none;
 }
-/* 可见内容放大并轻轻升起到中央，而不是硬切 */
-body.zen .hero { margin: 0; animation: zen-rise .55s var(--ease) both; }
-body.zen .search { max-width: min(680px, 92vw); margin: 18px auto 0; animation: zen-rise .55s var(--ease) .06s both; }
+/* 焦点区不再单独播「入场动画」：时钟与搜索在正常模式下本就可见，
+   硬套一条 from{opacity:0} 的动画会让它先「闪一下」再回来，反而更生硬。
+   改由两条同步过渡推进——下层收拢把整组下移的同时，时钟字号渐大，
+   于是观感是「一边下移、一边慢慢变大」，而不是先变大再被挪下去。 */
+body.zen .hero { margin: 0; }
+body.zen .search { max-width: min(680px, 92vw); margin: 18px auto 0; }
 body.zen .clock .time { font-size: clamp(60px, 10vw, 112px); }
-@keyframes zen-rise { from { opacity: 0; transform: translateY(12px); } }
 /* 角落收拢成圆：进入禅模式时，玻璃胶囊向右缩成一个圆，只裹住青瓷青同心圆按钮。
    做法：其余按钮宽度/内边距收为零（胶囊右缘固定，左缘随之右移，视觉即「向右滑动收拢」），
    间隙同时归零，最终只剩一枚圆形玻璃钮。全程无位移、无缩放，靠布局自身收拢（克制）。 */
@@ -1048,7 +1059,7 @@ body .corner-actions button {
               opacity .3s var(--ease), background .2s ease, color .2s ease, transform .08s ease,
               visibility 0s 0s;
 }
-body .corner-actions { transition: gap .38s var(--ease); }
+body .corner-actions { transition: gap .38s var(--ease), opacity .5s var(--ease); }
 body.zen .corner-actions { gap: 0; }
 body.zen .corner-actions button:not(#btn-zen) {
   width: 0; min-width: 0; padding: 0; border-width: 0;
@@ -1058,6 +1069,19 @@ body.zen .corner-actions button:not(#btn-zen) {
               opacity .26s var(--ease), visibility 0s .38s;
 }
 body.zen #btn-zen { color: var(--accent); }
+
+/* 禅模式闲置数秒后：角落那枚圆钮淡出，把画面彻底让给景色；鼠标再掠到右上角即淡入。
+   隐去时按钮 pointer-events:none，不会误触；容器本身（opacity:0 仍可命中）保留热区，
+   再用 ::before 向外扩一圈，掠过边缘也能唤出。悬停 / 键盘聚焦都会唤出并重置计时。 */
+body.zen.zen-idle .corner-actions { opacity: 0; }
+body.zen.zen-idle .corner-actions button { pointer-events: none; }
+body.zen.zen-idle .corner-actions::before {
+  content: ""; position: absolute; inset: -30px -20px -30px -30px;   /* 放大热区 */
+}
+body.zen .corner-actions:hover,
+body.zen .corner-actions:focus-within { opacity: 1; }
+body.zen .corner-actions:hover button,
+body.zen .corner-actions:focus-within button { pointer-events: auto; }
 
 /* ---------- 17. 响应式 ---------- */
 /* 矮屏（1080p 笔记本可视高度约 900px）：收一收焦点区与纵向间距，
