@@ -15,10 +15,8 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- 防首屏闪烁：在解析其余内容前按存档挂上 zen 状态，避免「先普通视图再跳禅模式」的闪一下 -->
-  <script>
-    try { var z = JSON.parse(localStorage.getItem('my-homepage-v1') || '{}'); if (z && z.zen) document.body.classList.add('zen'); } catch (e) {}
-  </script>
+  <!-- 防首屏闪烁：外置脚本（CSP 禁止 inline），置于 body 首行，解析到即同步挂上 zen 状态 -->
+  <script src="zen-restore.js"></script>
   <!-- 壁纸双层：换图时新旧两层交叉溶解（JS 控制 opacity / transform），不再硬切 -->
   <div class="wall" id="wall-a" aria-hidden="true"></div>
   <div class="wall" id="wall-b" aria-hidden="true"></div>
